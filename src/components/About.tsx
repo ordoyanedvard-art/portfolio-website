@@ -1,0 +1,89 @@
+import Image from "next/image";
+import { site, tools, skills } from "@/data/site";
+import Reveal from "./Reveal";
+import SectionHeading from "./SectionHeading";
+
+/**
+ * 06 — О себе.
+ * Слева текст о подходе, справа портрет. Ниже — стек инструментов.
+ */
+export default function About() {
+  return (
+    <section
+      id="about"
+      className="scroll-mt-24 border-b border-border py-20 lg:py-28"
+    >
+      <SectionHeading index="06" label="About" title="Как я" accent="работаю" />
+
+      <div className="gutter mt-12 grid grid-cols-1 gap-10 lg:mt-16 lg:grid-cols-12 lg:gap-16">
+        <Reveal className="lg:col-span-7" y={24}>
+          <div className="space-y-6 text-lg leading-relaxed text-muted">
+            <p>
+              Больше трёх лет делаю коммерческий визуал и видео на нейросетях.
+              Работаю с брендами одежды, музыкальными артистами и командами
+              AI-креаторов — от нейро-фотосессий до вирусных Instagram-сериалов.
+            </p>
+            <p>
+              Ключевое преимущество не в самих генераторах, а в пайплайне.
+              Связка ComfyUI + ControlNet + Runway сокращает производство в
+              3–5 раз без потери качества: ролик, который раньше собирался три
+              дня, выходит за десять часов. Персонаж при этом остаётся тем же
+              во всех кадрах серии — на этом обычно и ломаются AI-проекты.
+            </p>
+            <p className="text-text">
+              Веду проект целиком: концепция, сценарий с LLM, раскадровка,
+              генерация, апскейлинг, ретушь, монтаж, финальные файлы под каждую
+              площадку.
+            </p>
+          </div>
+
+          <div className="mt-12">
+            <p className="label mb-6 text-muted">Навыки</p>
+            <ul className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
+              {skills.map((skill) => (
+                <li
+                  key={skill}
+                  className="flex items-baseline gap-3 text-sm text-text/85"
+                >
+                  <span aria-hidden className="text-accent">
+                    /
+                  </span>
+                  {skill}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="mt-12">
+            <p className="label mb-6 text-muted">Инструменты</p>
+            <ul className="flex flex-wrap gap-2">
+              {tools.map((tool) => (
+                <li
+                  key={tool}
+                  className="label border border-border px-3 py-2 text-text/85 transition-colors hover:border-accent hover:text-accent"
+                >
+                  {tool}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Reveal>
+
+        <Reveal className="lg:col-span-5" delay={0.12} y={24}>
+          <div className="relative aspect-[4/5] overflow-hidden bg-surface">
+            <Image
+              src="/placeholders/portrait.svg"
+              alt={`${site.name} — портрет`}
+              fill
+              sizes="(max-width: 1024px) 100vw, 40vw"
+              className="object-cover"
+            />
+          </div>
+          <p className="label mt-4 text-muted">
+            {site.name} · {site.role}
+          </p>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
