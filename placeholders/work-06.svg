@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1750" viewBox="0 0 1400 1750" role="img" aria-label="Placeholder 06">
+  <rect width="1400" height="1750" fill="#141414"/>
+  <rect x="1" y="1" width="1398" height="1748" fill="none" stroke="#262626" stroke-width="2"/>
+  <line x1="0" y1="0" x2="1400" y2="1750" stroke="#1c1c1c" stroke-width="2"/>
+  <line x1="1400" y1="0" x2="0" y2="1750" stroke="#1c1c1c" stroke-width="2"/>
+  <text x="50%" y="50%" fill="#ff2a1f" font-family="system-ui,sans-serif" font-size="392" font-weight="700" text-anchor="middle" dominant-baseline="central" opacity="0.85">06</text>
+  <text x="50%" y="1645" fill="#8a8a8a" font-family="system-ui,sans-serif" font-size="49" letter-spacing="9" text-anchor="middle">4:5</text>
+</svg>

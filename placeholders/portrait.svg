@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500" role="img" aria-label="Portrait placeholder">
+  <rect width="1200" height="1500" fill="#141414"/>
+  <rect x="1" y="1" width="1198" height="1498" fill="none" stroke="#262626" stroke-width="2"/>
+  <circle cx="600" cy="620" r="150" fill="none" stroke="#ff2a1f" stroke-width="4" opacity="0.7"/>
+  <path d="M330 1180c0-160 120-280 270-280s270 120 270 280" fill="none" stroke="#ff2a1f" stroke-width="4" opacity="0.7"/>
+  <text x="50%" y="1400" fill="#8a8a8a" font-family="system-ui,sans-serif" font-size="40" letter-spacing="7" text-anchor="middle">PORTRAIT</text>
+</svg>
