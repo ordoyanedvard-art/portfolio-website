@@ -1,0 +1,6 @@
+title: Test Work
+client: Personal Project
+role: Photography
+year: 2026
+tags: Photo
+featured: false
