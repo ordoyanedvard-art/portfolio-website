@@ -3,5 +3,6 @@ client: A.V.G
 role: AI concept, visual production and editing
 year: 2026
 tags: Music Video, AI Visuals, 3D, Motion
+mux: nJxbyEUf02M8gJVlbJuFzXxQwy2aZVRVlvqxKhxaiy3A 
 aspect: 9/16
 featured: true
