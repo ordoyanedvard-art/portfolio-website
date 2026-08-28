@@ -119,7 +119,7 @@ for (const dirName of entries) {
     const path = join(dir, file);
     const size = imageSize(path) ?? { width: 1400, height: 1750 };
     if (!imageSize(path)) warnings.push(`${dirName}/${file}: размеры не определились, поставлено 1400×1750`);
-    return { src: `/works/${dirName}/${file}`, ...size };
+    return { src: `/portfolio-website/works/${dirName}/${file}`, ...size };
   };
 
   const cover = measure(coverFile);
