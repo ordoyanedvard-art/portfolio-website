@@ -1,0 +1,7 @@
+title: A.V.G — BLAGO
+client: A.V.G
+role: AI concept, visual production and editing
+year: 2026
+tags: Music Video, AI Visuals, 3D, Motion
+aspect: 9/16
+featured: true
