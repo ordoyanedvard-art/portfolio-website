@@ -33,7 +33,7 @@ export default function PageShell({
       <main id="top">
         <Hero locale={locale} />
         <Marquee />
-        <Stats />
+        <Stats locale={locale} />
         <WorkGrid
           locale={locale}
           initialSlug={initialSlug}
