@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { works, getWorkBySlug } from "@/data/works";
+import { translations, type Locale } from "@/data/i18n";
 import WorkCard from "./WorkCard";
 import Lightbox from "./Lightbox";
 import Reveal from "./Reveal";
 import SectionHeading from "./SectionHeading";
 
 interface WorkGridProps {
-  /** Если страница открыта по адресу /work/<slug> — сразу показываем просмотрщик */
+  locale: Locale;
   initialSlug?: string;
 }
 
@@ -17,7 +18,11 @@ interface WorkGridProps {
  * Вариант C: адрес меняется на /work/<slug> без перезагрузки,
  * ссылкой можно поделиться, кнопка «назад» закрывает просмотрщик.
  */
-export default function WorkGrid({ initialSlug }: WorkGridProps) {
+export default function WorkGrid({
+  locale,
+  initialSlug,
+}: WorkGridProps) {
+  const t = translations[locale];
   const [activeSlug, setActiveSlug] = useState<string | undefined>(initialSlug);
 
   const open = useCallback((slug: string) => {
@@ -54,11 +59,11 @@ export default function WorkGrid({ initialSlug }: WorkGridProps) {
   return (
     <section id="work" className="scroll-mt-24 border-b border-border py-20 lg:py-28">
       <SectionHeading
-        index="04"
-        label="Selected work"
-        title="Избранные"
-        accent="работы"
-      />
+  index="04"
+  label={t.work.sectionLabel}
+  title={t.work.sectionTitle}
+  accent={t.work.sectionAccent}
+/>
 
       <Reveal className="gutter mt-12 lg:mt-16" y={16}>
         <div className="grid items-start grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
