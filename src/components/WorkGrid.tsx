@@ -8,6 +8,8 @@ import Lightbox from "./Lightbox";
 import Reveal from "./Reveal";
 import SectionHeading from "./SectionHeading";
 
+type WorkFilter = "all" | "photo" | "video";
+
 interface WorkGridProps {
   locale: Locale;
   initialSlug?: string;
@@ -22,9 +24,15 @@ export default function WorkGrid({
   locale,
   initialSlug,
 }: WorkGridProps) {
-  const t = translations[locale];
-  const [activeSlug, setActiveSlug] = useState<string | undefined>(initialSlug);
+ const t = translations[locale];
 
+const [filter, setFilter] = useState<WorkFilter>("all");
+const [activeSlug, setActiveSlug] = useState<string | undefined>(initialSlug);
+
+const filteredWorks =
+  filter === "all"
+    ? works
+    : works.filter((work) => work.kind === filter);
   const open = useCallback((slug: string) => {
     setActiveSlug(slug);
     window.history.pushState({ slug }, "", `/work/${slug}`);
@@ -53,8 +61,8 @@ export default function WorkGrid({
 
   const activeWork = activeSlug ? getWorkBySlug(activeSlug) : undefined;
   const activeIndex = activeWork
-    ? works.findIndex((w) => w.slug === activeWork.slug)
-    : -1;
+  ? filteredWorks.findIndex((w) => w.slug === activeWork.slug)
+  : -1;
 
   return (
     <section id="work" className="scroll-mt-24 border-b border-border py-20 lg:py-28">
@@ -66,9 +74,37 @@ export default function WorkGrid({
 />
 
       <Reveal className="gutter mt-12 lg:mt-16" y={16}>
-        <div className="grid items-start grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-          {works.map((work, i) => (
-            <WorkCard key={work.slug} work={work} index={i} onOpen={open} />
+  <div className="mb-8 flex flex-wrap gap-3">
+    {(
+      [
+        ["all", t.work.all],
+        ["photo", t.work.images],
+        ["video", t.work.videos],
+      ] as const
+    ).map(([value, label]) => (
+      <button
+        key={value}
+        type="button"
+        onClick={() => {
+          setFilter(value);
+          setActiveSlug(undefined);
+        }}
+        className={[
+          "label border px-4 py-2.5 transition-colors",
+          filter === value
+            ? "border-accent bg-accent text-bg"
+            : "border-border text-muted hover:border-accent hover:text-accent",
+        ].join(" ")}
+      >
+        {label}
+      </button>
+    ))}
+  </div>
+
+  <div className="grid items-start grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+          {filteredWorks.map((work, i) => (
+  <WorkCard key={work.slug} work={work} index={i} onOpen={open} />
+))}
           ))}
         </div>
       </Reveal>
@@ -77,12 +113,18 @@ export default function WorkGrid({
         <Lightbox
           work={activeWork}
           index={activeIndex}
-          total={works.length}
+          total={filteredWorks.length}
           onClose={close}
           onPrev={() =>
-            goTo(works[(activeIndex - 1 + works.length) % works.length].slug)
-          }
-          onNext={() => goTo(works[(activeIndex + 1) % works.length].slug)}
+  goTo(
+    filteredWorks[
+      (activeIndex - 1 + filteredWorks.length) % filteredWorks.length
+    ].slug
+  )
+}
+onNext={() =>
+  goTo(filteredWorks[(activeIndex + 1) % filteredWorks.length].slug)
+}
         />
       ) : null}
     </section>
