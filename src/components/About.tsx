@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { site, tools, skills } from "@/data/site";
+import { site, tools } from "@/data/site";
 import { translations, type Locale } from "@/data/i18n";
 import Reveal from "./Reveal";
 import SectionHeading from "./SectionHeading";
@@ -29,29 +29,17 @@ export default function About({ locale }: AboutProps) {
       <div className="gutter mt-12 grid grid-cols-1 gap-10 lg:mt-16 lg:grid-cols-12 lg:gap-16">
         <Reveal className="lg:col-span-7" y={24}>
           <div className="space-y-6 text-lg leading-relaxed text-muted">
-            <p>
-              Больше трёх лет делаю коммерческий визуал и видео на нейросетях.
-              Работаю с брендами одежды, музыкальными артистами и командами
-              AI-креаторов — от нейро-фотосессий до вирусных Instagram-сериалов.
-            </p>
-            <p>
-              Ключевое преимущество не в самих генераторах, а в пайплайне.
-              Связка ComfyUI + ControlNet + Runway сокращает производство в
-              3–5 раз без потери качества: ролик, который раньше собирался три
-              дня, выходит за десять часов. Персонаж при этом остаётся тем же
-              во всех кадрах серии — на этом обычно и ломаются AI-проекты.
-            </p>
-            <p className="text-text">
-              Веду проект целиком: концепция, сценарий с LLM, раскадровка,
-              генерация, апскейлинг, ретушь, монтаж, финальные файлы под каждую
-              площадку.
-            </p>
+            <p>{t.about.paragraphs[0]}</p>
+
+<p>{t.about.paragraphs[1]}</p>
+
+<p className="text-text">{t.about.paragraphs[2]}</p>
           </div>
 
           <div className="mt-12">
-            <p className="label mb-6 text-muted">Навыки</p>
+            <p className="label mb-6 text-muted">{t.about.skillsTitle}</p>
             <ul className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
-              {skills.map((skill) => (
+              {t.about.skills.map((skill) => (
                 <li
                   key={skill}
                   className="flex items-baseline gap-3 text-sm text-text/85"
