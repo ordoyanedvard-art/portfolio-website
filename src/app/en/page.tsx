@@ -1,5 +1,5 @@
-import HomePage from "../page";
+import PageShell from "@/components/PageShell";
 
 export default function EnglishPage() {
-  return <HomePage />;
+  return <PageShell locale="en" />;
 }
