@@ -1,4 +1,5 @@
 import { services } from "@/data/site";
+import { translations, type Locale } from "@/data/i18n";
 import { pad } from "@/lib/utils";
 import Reveal from "./Reveal";
 import SectionHeading from "./SectionHeading";
@@ -8,13 +9,23 @@ import SectionHeading from "./SectionHeading";
  * Нумерованный список: номер красным, название крупно, описание справа.
  * Ховер подсвечивает строку целиком.
  */
-export default function Services() {
+interface ServicesProps {
+  locale: Locale;
+}
+
+export default function Services({ locale }: ServicesProps) {
+  const t = translations[locale];
   return (
     <section
       id="services"
       className="scroll-mt-24 border-b border-border py-20 lg:py-28"
     >
-      <SectionHeading index="05" label="What i do" title="Что я" accent="делаю" />
+      <SectionHeading
+  index="05"
+  label={t.services.sectionLabel}
+  title={t.services.sectionTitle}
+  accent={t.services.sectionAccent}
+/>
 
       <div className="gutter mt-12 lg:mt-16">
         {services.map((service, i) => (
