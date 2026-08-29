@@ -1,3 +1,4 @@
+import type { Locale } from "@/data/i18n";
 import Nav from "./Nav";
 import ScrollProgress from "./ScrollProgress";
 import CustomCursor from "./CustomCursor";
@@ -11,31 +12,38 @@ import Contact from "./Contact";
 import Footer from "./Footer";
 
 interface PageShellProps {
-  /** Задан, когда страница открыта по адресу /work/<slug> */
+  /** Язык страницы */
+  locale?: Locale;
+
+  /** Открытая работа, если адрес содержит /work/<slug> */
   initialSlug?: string;
 }
 
-/**
- * Единственный макет сайта.
- * И главная, и /work/<slug> рендерят одно и то же —
- * различие только в том, открыт ли просмотрщик сразу.
- */
-export default function PageShell({ initialSlug }: PageShellProps) {
+export default function PageShell({
+  locale = "ru",
+  initialSlug,
+}: PageShellProps) {
   return (
     <>
       <ScrollProgress />
       <CustomCursor />
-      <Nav />
+
+      <Nav locale={locale} />
+
       <main id="top">
-        <Hero />
+        <Hero locale={locale} />
         <Marquee />
         <Stats />
-        <WorkGrid initialSlug={initialSlug} />
-        <Services />
-        <About />
-        <Contact />
+        <WorkGrid
+          locale={locale}
+          initialSlug={initialSlug}
+        />
+        <Services locale={locale} />
+        <About locale={locale} />
+        <Contact locale={locale} />
       </main>
-      <Footer />
+
+      <Footer locale={locale} />
     </>
   );
 }
