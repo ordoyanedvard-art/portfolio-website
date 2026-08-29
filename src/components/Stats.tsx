@@ -1,6 +1,6 @@
 import { stats } from "@/data/site";
 import { pad } from "@/lib/utils";
-import { type Locale } from "@/data/i18n";
+import { translations, type Locale } from "@/data/i18n";
 import Reveal from "./Reveal";
 
 interface StatsProps {
@@ -23,6 +23,8 @@ const statLabels = {
 } as const;
 
 export default function Stats({ locale }: StatsProps) {
+  const t = translations[locale];
+
   return (
     <section
       aria-label={locale === "ru" ? "Цифры" : "Results"}
@@ -47,7 +49,7 @@ export default function Stats({ locale }: StatsProps) {
             </span>
 
             <p className="display text-3xl lg:text-4xl">
-              {stat.value}
+              {t.stats.values[i]}
             </p>
 
             <p className="mt-3 max-w-[14rem] text-sm text-muted">
