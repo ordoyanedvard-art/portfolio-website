@@ -13,7 +13,7 @@ export default function Footer({ locale }: FooterProps) {
     <footer className="gutter py-10">
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <p className="label text-muted">
-          © {year} {site.name} · {t.footer.allRightsReserved}
+          © {year} {t.identity.name} · {t.footer.allRightsReserved}
         </p>
 
         <nav
