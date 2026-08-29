@@ -4,11 +4,13 @@ import Image from "next/image";
 import { useState } from "react";
 import type { Work } from "@/lib/types";
 import { aspectClass, cn, pad } from "@/lib/utils";
+import type { Locale } from "@/data/i18n";
 
 interface WorkCardProps {
   work: Work;
   index: number;
   onOpen: (slug: string) => void;
+  locale?: Locale;
 }
 
 /**
@@ -17,11 +19,14 @@ interface WorkCardProps {
  * стрелка ↗ уезжает вправо-вверх.
  * Кликабельна кнопкой — доступно с клавиатуры.
  */
-export default function WorkCard({ work, index, onOpen }: WorkCardProps) {
+export default function WorkCard({ work, index, onOpen, locale = "ru" }: WorkCardProps) {
   const [hovered, setHovered] = useState(false);
 
   const isVideo = work.kind === "video";
   const hasMux = isVideo && Boolean(work.muxPlaybackId);
+
+  const title = locale === "en" && work.title_en ? work.title_en : work.title;
+  const client = locale === "en" && work.client_en ? work.client_en : work.client;
 
   /* Анимированное превью Mux: короткая петля из середины ролика */
   const previewUrl = hasMux
@@ -36,7 +41,7 @@ export default function WorkCard({ work, index, onOpen }: WorkCardProps) {
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setHovered(true)}
       onBlur={() => setHovered(false)}
-      aria-label={`Открыть работу: ${work.title}, ${work.client}`}
+      aria-label={`Открыть работу: ${title}, ${client}`}
       data-cursor="view"
       className={cn(
         "group relative block h-fit w-full self-start overflow-hidden bg-surface text-left",
@@ -92,33 +97,25 @@ export default function WorkCard({ work, index, onOpen }: WorkCardProps) {
           </span>
         </div>
 
-        {/* Название и стрелка — нижний ряд */}
-        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-4 sm:p-5">
-          <div className="min-w-0">
-            <p className="display truncate text-lg sm:text-xl">{work.title}</p>
-            <p className="label mt-2 truncate text-muted">{work.client}</p>
-          </div>
-          <span
-            aria-hidden
-            className={cn(
-              "shrink-0 text-xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
-              hovered
-                ? "translate-x-1 -translate-y-1 text-accent"
-                : "text-text/70"
-            )}
-          >
-            ↗
-          </span>
+        {/* Название и клиент — нижний ряд */}
+        <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
+          <h3 className="display text-xl sm:text-2xl">{title}</h3>
+          <p className="label mt-2 text-muted">{client}</p>
         </div>
 
-        {/* Красная линия снизу при наведении */}
-        <div
-          aria-hidden
-          className={cn(
-            "absolute bottom-0 left-0 h-[2px] bg-accent transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]",
-            hovered ? "w-full" : "w-0"
-          )}
-        />
+        {/* Стрелка перехода ↗ — правый верхний угол */}
+        <div className="absolute right-4 top-4 overflow-hidden sm:right-5 sm:top-5">
+          <div
+            className={cn(
+              "flex size-10 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white backdrop-blur-sm transition-transform duration-500",
+              hovered ? "translate-x-1 -translate-y-1" : "translate-x-0 translate-y-0"
+            )}
+          >
+            <span aria-hidden className="text-lg">
+              ↗
+            </span>
+          </div>
+        </div>
       </div>
     </button>
   );
