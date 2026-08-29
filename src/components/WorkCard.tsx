@@ -39,7 +39,7 @@ export default function WorkCard({ work, index, onOpen }: WorkCardProps) {
       aria-label={`Открыть работу: ${work.title}, ${work.client}`}
       data-cursor="view"
       className={cn(
-        "group relative block w-full overflow-hidden bg-surface text-left",
+        "group relative block h-fit w-full self-start overflow-hidden bg-surface text-left",
         // Свой курсор есть только на широких экранах с мышью,
         // там и прячем системный
         "cursor-pointer lg:cursor-none",
