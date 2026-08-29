@@ -46,7 +46,7 @@ export default function Hero({ locale }: HeroProps) {
 
       <div className="gutter relative z-10 pb-12 sm:pb-16">
         <motion.p {...rise(0.1)} className="label mb-6 text-muted">
-          {site.location}
+          {t.hero.location}
         </motion.p>
 
         <h1 className="display text-[13vw] leading-[0.85] sm:text-[11vw] lg:text-[8.5vw]">
@@ -62,7 +62,7 @@ export default function Hero({ locale }: HeroProps) {
           {...rise(0.46)}
           className="mt-8 max-w-md text-base text-muted sm:text-lg"
         >
-          {site.tagline}
+          {t.hero.tagline}
         </motion.p>
 
         <motion.div
