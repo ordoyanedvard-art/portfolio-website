@@ -1,0 +1,11 @@
+title_ru: Доктор Айболит: Он придет на помощь — Эп. 1
+title_en: Dr. Aibolit: He's Here to Help — Ep. 1
+client_ru: Личный проект
+client_en: Personal Project
+role_ru: Режиссура, Сценарий, AI-генерация & Анимация
+role_en: Directing, Script, AI Generation & Animation
+year: 2026
+tags: Gpt Image 2, Grok imagine 1, Topaz AI, CapCut, Adobe Premier
+mux: 7MTct1iPqzr013MrtFAxy49dScKuKEoAIzDjt2XijNA00
+featured: true
+aspect: 16/9
