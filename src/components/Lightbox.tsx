@@ -36,7 +36,7 @@ export default function Lightbox({
   const reduce = useReducedMotion();
   const panelRef = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState(0);
-
+  const [zoomed, setZoomed] = useState(false);
   const isPhoto = work.kind === "photo";
   /* Стабильная ссылка на массив: иначе эффект предзагрузки
      перезапускается на каждый рендер */
@@ -76,10 +76,16 @@ export default function Lightbox({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
+  e.preventDefault();
+
+  if (zoomed) {
+    setZoomed(false);
+  } else {
+    onClose();
+  }
+
+  return;
+}
       if (e.key === "ArrowRight") {
         e.preventDefault();
         nextFrame();
@@ -210,16 +216,27 @@ export default function Lightbox({
                 />
               </div>
             ) : (
-              <div className="relative h-full w-full">
-                <Image
-                  src={current.src}
-                  alt={current.alt}
-                  fill
-                  sizes="100vw"
-                  className="object-contain"
-                  priority
-                />
-              </div>
+              <div
+  className={cn(
+    "relative h-full w-full overflow-visible",
+    zoomed && "z-10"
+  )}
+>
+  <Image
+    src={current.src}
+    alt={current.alt}
+    fill
+    sizes="100vw"
+    priority
+    onClick={() => setZoomed((value) => !value)}
+    className={cn(
+      "object-contain transition-transform duration-500 ease-out",
+      zoomed
+        ? "scale-[1.8] cursor-zoom-out"
+        : "scale-100 cursor-zoom-in"
+    )}
+  />
+</div>
             )}
           </div>
 
