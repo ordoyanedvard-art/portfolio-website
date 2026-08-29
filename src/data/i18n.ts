@@ -38,10 +38,32 @@ export const translations = {
     },
 
     services: {
-      sectionLabel: "Что я делаю",
-      sectionTitle: "Что я",
-      sectionAccent: "делаю",
+  sectionLabel: "Что я делаю",
+  sectionTitle: "Что я",
+  sectionAccent: "делаю",
+  items: [
+    {
+      title: "Нейро-фотосессии и lookbook",
+      description:
+        "Кампейн-съёмка без съёмочного дня: концепт, генерация, AI-апскейлинг, ретушь. Пайплайн ComfyUI + ControlNet удерживает одного и того же героя во всех кадрах серии.",
     },
+    {
+      title: "Промо-ролики",
+      description:
+        "Рекламные видео под задачу бренда: сценарий, раскадровка, генерация сцен, анимация, монтаж и финальный рендер.",
+    },
+    {
+      title: "Креативы для Reels и TikTok",
+      description:
+        "Вертикальные форматы под соцсети и вирусные серии. Собираются пакетами в едином визуальном языке — так работает контент-план, а не отдельный ролик.",
+    },
+    {
+      title: "Полный цикл производства",
+      description:
+        "Веду проект от концепции до готовых файлов под каждую площадку. Один подрядчик вместо команды: сценарист, оператор, монтажёр, ретушёр.",
+    },
+  ],
+},
 
     about: {
       sectionLabel: "Обо мне",
@@ -98,10 +120,32 @@ export const translations = {
     },
 
     services: {
-      sectionLabel: "What I do",
-      sectionTitle: "What I",
-      sectionAccent: "do",
+  sectionLabel: "What I do",
+  sectionTitle: "What I",
+  sectionAccent: "do",
+  items: [
+    {
+      title: "AI photoshoots and lookbooks",
+      description:
+        "Campaign imagery without a traditional shoot day: concept, generation, AI upscaling and retouching. A ComfyUI + ControlNet pipeline keeps the same character consistent across the entire series.",
     },
+    {
+      title: "Promo videos",
+      description:
+        "Brand-focused advertising videos: scripting, storyboarding, scene generation, animation, editing and final rendering.",
+    },
+    {
+      title: "Reels and TikTok creatives",
+      description:
+        "Vertical content formats for social media and viral series. Delivered in batches with one consistent visual language — because a content plan works better than isolated videos.",
+    },
+    {
+      title: "Full-cycle production",
+      description:
+        "I take projects from the initial concept to platform-ready files. One producer instead of an entire team: scriptwriter, cinematographer, editor and retoucher.",
+    },
+  ],
+},
 
     about: {
       sectionLabel: "About",
