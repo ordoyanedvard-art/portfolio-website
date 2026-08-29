@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion } from "motion/react";
 import { site } from "@/data/site";
+import { translations, type Locale } from "@/data/i18n";
 import HeroVideo from "./HeroVideo";
 import ScrollHint from "./ScrollHint";
 
@@ -10,7 +11,12 @@ import ScrollHint from "./ScrollHint";
  * Полноэкранное видео фоном, затемнение, поверх крупная типографика.
  * Пока heroMuxPlaybackId пуст, вместо видео — статичный градиент-заглушка.
  */
-export default function Hero() {
+interface HeroProps {
+  locale: Locale;
+}
+
+export default function Hero({ locale }: HeroProps) {
+  const t = translations[locale];
   const reduce = useReducedMotion();
 
   const rise = (delay: number) =>
@@ -25,7 +31,7 @@ export default function Hero() {
   return (
     <section
       className="relative flex h-svh min-h-[36rem] flex-col justify-end overflow-hidden"
-      aria-label="Первый экран"
+      aria-label={t.hero.ariaLabel}
     >
       <HeroVideo playbackId={site.heroMuxPlaybackId} />
 
@@ -67,7 +73,7 @@ export default function Hero() {
             href="#work"
             className="label group inline-flex items-center gap-2 text-text transition-colors hover:text-accent"
           >
-            Selected work
+            {t.hero.selectedWork}
             <span
               aria-hidden
               className="transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-1 group-hover:-translate-y-1"
@@ -83,7 +89,7 @@ export default function Hero() {
               rel="noopener noreferrer"
               className="label group inline-flex items-center gap-2 text-muted transition-colors hover:text-accent"
             >
-              Showreel
+              {t.hero.showreel}
               <span
                 aria-hidden
                 className="transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-1 group-hover:-translate-y-1"
