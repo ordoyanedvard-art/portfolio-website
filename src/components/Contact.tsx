@@ -13,10 +13,10 @@ interface ContactProps {
 export default function Contact({ locale }: ContactProps) {
   const t = translations[locale];
   const links = [
-    { label: "Telegram", href: site.telegram },
-    { label: "Behance", href: site.behance },
-    { label: "Instagram", href: site.instagram },
-  ].filter((l) => Boolean(l.href));
+  { label: "Behance", href: site.behance },
+  { label: "Instagram", href: site.instagram },
+  { label: "Telegram", href: site.telegram },
+].filter((l) => Boolean(l.href));
 
   return (
     <section
