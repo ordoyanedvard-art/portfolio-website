@@ -2,36 +2,52 @@
 
 import { useEffect, useState } from "react";
 import { site } from "@/data/site";
+import { translations, type Locale } from "@/data/i18n";
 import { cn } from "@/lib/utils";
 
-const items = [
-  { label: "Work", href: "#work" },
-  { label: "Services", href: "#services" },
-  { label: "About", href: "#about" },
-  { label: "Contact", href: "#contact" },
-];
+interface NavProps {
+  locale: Locale;
+}
 
-/**
- * Фиксированная шапка. Появляется фон после прокрутки первого экрана.
- * На мобильном пункты скрыты, остаётся кнопка контакта.
- */
-export default function Nav() {
+export default function Nav({ locale }: NavProps) {
   const [solid, setSolid] = useState(false);
+  const t = translations[locale];
 
   useEffect(() => {
-    const onScroll = () => setSolid(window.scrollY > window.innerHeight * 0.6);
+    const onScroll = () => {
+      setSolid(window.scrollY > window.innerHeight * 0.6);
+    };
+
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
+
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  /* Плавный переход по якорю через Lenis, иначе нативный скачок */
-  const handleAnchor = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+  const handleAnchor = (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    href: string
+  ) => {
     const target = document.querySelector(href);
+
     if (!target || !window.__lenis) return;
+
     e.preventDefault();
     window.__lenis.scrollTo(target as HTMLElement, { offset: -80 });
   };
+
+  const languageHref =
+    locale === "ru"
+      ? "/portfolio-website/en/"
+      : "/portfolio-website/ru/";
+
+  const languageLabel = locale === "ru" ? "EN" : "RU";
+
+  const items = [
+    { label: t.nav.work, href: "#work" },
+    { label: t.nav.services, href: "#services" },
+    { label: t.nav.about, href: "#about" },
+  ];
 
   return (
     <header
@@ -47,6 +63,7 @@ export default function Nav() {
           href="#top"
           onClick={(e) => {
             if (!window.__lenis) return;
+
             e.preventDefault();
             window.__lenis.scrollTo(0);
           }}
@@ -55,9 +72,9 @@ export default function Nav() {
           {site.name}
         </a>
 
-        <nav aria-label="Основная навигация">
-          <ul className="flex items-center gap-6 lg:gap-10">
-            {items.slice(0, 3).map((item) => (
+        <nav aria-label={locale === "ru" ? "Основная навигация" : "Main navigation"}>
+          <ul className="flex items-center gap-3 sm:gap-6 lg:gap-8">
+            {items.map((item) => (
               <li key={item.href} className="hidden sm:block">
                 <a
                   href={item.href}
@@ -68,19 +85,35 @@ export default function Nav() {
                 </a>
               </li>
             ))}
+
             <li>
               <a
                 href="#contact"
                 onClick={(e) => handleAnchor(e, "#contact")}
-                className="label group inline-flex items-center gap-2 border border-border px-4 py-2.5 text-text transition-colors hover:border-accent hover:text-accent"
+                className="label group inline-flex items-center gap-2 border border-border px-3 py-2.5 text-text transition-colors hover:border-accent hover:text-accent sm:px-4"
               >
-                Contact
+                <span className="hidden sm:inline">{t.nav.contact}</span>
+                <span className="sm:hidden">→</span>
                 <span
                   aria-hidden
                   className="transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
                 >
                   ↗
                 </span>
+              </a>
+            </li>
+
+            <li>
+              <a
+                href={languageHref}
+                className="label text-accent transition-colors hover:text-text"
+                aria-label={
+                  locale === "ru"
+                    ? "Переключить на английский"
+                    : "Switch to Russian"
+                }
+              >
+                {languageLabel}
               </a>
             </li>
           </ul>
