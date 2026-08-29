@@ -21,10 +21,13 @@ export interface WorkBase {
   slug: string;
   /** Название работы */
   title: string;
+  title_en?: string;
   /** Клиент или проект */
   client: string;
+  client_en?: string;
   /** Что делал — 1–2 строки */
   role: string;
+  role_en?: string;
   /** Год */
   year: string;
   /** Теги: инструменты и тип работы */
