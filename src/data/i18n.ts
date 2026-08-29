@@ -14,10 +14,13 @@ export const translations = {
     },
 
     hero: {
-      ariaLabel: "Первый экран",
-      showreel: "Шоурил",
-      selectedWork: "Избранные работы",
-    },
+  ariaLabel: "Первый экран",
+  showreel: "Шоурил",
+  selectedWork: "Избранные работы",
+  tagline:
+    "Нейро-фотосессии, промо-ролики и креативы для соцсетей полного цикла. От концепции и раскадровки до финального рендера и монтажа.",
+  location: "Удалённо / Проект / Фулл-тайм",
+},
 
     work: {
       sectionLabel: "Избранные работы",
@@ -72,11 +75,13 @@ export const translations = {
     },
 
     hero: {
-      ariaLabel: "Hero section",
-      showreel: "Showreel",
-      selectedWork: "Selected work",
-    },
-
+  ariaLabel: "Hero section",
+  showreel: "Showreel",
+  selectedWork: "Selected work",
+  tagline:
+    "AI photoshoots, promo videos and full-cycle social media creatives. From concept and storyboarding to final rendering and editing.",
+  location: "Remote / Project / Full-time",
+},
     work: {
       sectionLabel: "Selected work",
       sectionTitle: "Selected",
