@@ -66,11 +66,31 @@ export const translations = {
 },
 
     about: {
-      sectionLabel: "Обо мне",
-      sectionTitle: "Как я",
-      sectionAccent: "работаю",
-      tools: "Инструменты",
-    },
+  sectionLabel: "Обо мне",
+  sectionTitle: "Как я",
+  sectionAccent: "работаю",
+  tools: "Инструменты",
+  skillsTitle: "Навыки",
+
+  paragraphs: [
+    "Больше трёх лет делаю коммерческий визуал и видео на нейросетях. Работаю с брендами одежды, музыкальными артистами и командами AI-креаторов — от нейро-фотосессий до вирусных Instagram-сериалов.",
+
+    "Ключевое преимущество не в самих генераторах, а в пайплайне. Связка ComfyUI + ControlNet + Runway сокращает производство в 3–5 раз без потери качества: ролик, который раньше собирался три дня, выходит за десять часов. Персонаж при этом остаётся тем же во всех кадрах серии — на этом обычно и ломаются AI-проекты.",
+
+    "Веду проект целиком: концепция, сценарий с LLM, раскадровка, генерация, апскейлинг, ретушь, монтаж, финальные файлы под каждую площадку.",
+  ],
+
+  skills: [
+    "Промпт-инжиниринг (Advanced)",
+    "Text-to-Image / Image-to-Image",
+    "Text-to-Video / Image-to-Video",
+    "ControlNet, Inpainting, Outpainting",
+    "AI Upscaling и ретушь",
+    "Раскадровка и концепт-арт",
+    "Консистентность персонажей",
+    "Сценарии с LLM",
+  ],
+},
 
     contact: {
       sectionLabel: "Связаться",
@@ -148,11 +168,31 @@ export const translations = {
 },
 
     about: {
-      sectionLabel: "About",
-      sectionTitle: "How I",
-      sectionAccent: "work",
-      tools: "Tools",
-    },
+  sectionLabel: "About",
+  sectionTitle: "How I",
+  sectionAccent: "work",
+  tools: "Tools",
+  skillsTitle: "Skills",
+
+  paragraphs: [
+    "For more than three years, I have been creating commercial visuals and video with generative AI. I work with fashion brands, music artists and AI creator teams — from AI photoshoots to viral Instagram series.",
+
+    "The key advantage is not the generators themselves, but the pipeline. The combination of ComfyUI, ControlNet and Runway cuts production time by 3–5x without sacrificing quality: a video that used to take three days can now be delivered in ten hours. The character also stays consistent across every frame of the series — which is where most AI projects usually fail.",
+
+    "I lead projects from start to finish: concept, LLM-assisted scripting, storyboarding, generation, upscaling, retouching, editing and final files for every platform.",
+  ],
+
+  skills: [
+    "Prompt Engineering (Advanced)",
+    "Text-to-Image / Image-to-Image",
+    "Text-to-Video / Image-to-Video",
+    "ControlNet, Inpainting, Outpainting",
+    "AI Upscaling and Retouching",
+    "Storyboarding and Concept Art",
+    "Character Consistency",
+    "LLM-assisted Scripting",
+  ],
+},
 
     contact: {
       sectionLabel: "Get in touch",
