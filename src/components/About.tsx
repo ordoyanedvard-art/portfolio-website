@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { site, tools, skills } from "@/data/site";
+import { translations, type Locale } from "@/data/i18n";
 import Reveal from "./Reveal";
 import SectionHeading from "./SectionHeading";
 
@@ -7,13 +8,23 @@ import SectionHeading from "./SectionHeading";
  * 06 — О себе.
  * Слева текст о подходе, справа портрет. Ниже — стек инструментов.
  */
-export default function About() {
+interface AboutProps {
+  locale: Locale;
+}
+
+export default function About({ locale }: AboutProps) {
+  const t = translations[locale];
   return (
     <section
       id="about"
       className="scroll-mt-24 border-b border-border py-20 lg:py-28"
     >
-      <SectionHeading index="06" label="About" title="Как я" accent="работаю" />
+      <SectionHeading
+  index="06"
+  label={t.about.sectionLabel}
+  title={t.about.sectionTitle}
+  accent={t.about.sectionAccent}
+/>
 
       <div className="gutter mt-12 grid grid-cols-1 gap-10 lg:mt-16 lg:grid-cols-12 lg:gap-16">
         <Reveal className="lg:col-span-7" y={24}>
@@ -55,7 +66,7 @@ export default function About() {
           </div>
 
           <div className="mt-12">
-            <p className="label mb-6 text-muted">Инструменты</p>
+            <p className="label mb-6 text-muted">{t.about.tools}</p>
             <ul className="flex flex-wrap gap-2">
               {tools.map((tool) => (
                 <li
