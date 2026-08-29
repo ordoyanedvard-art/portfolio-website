@@ -42,7 +42,9 @@ export const translations = {
       fullVersion: "Полная версия",
       openWork: "Открыть работу",
     },
-
+all: "Все",
+images: "Изображения",
+videos: "Видео",
     services: {
   sectionLabel: "Что я делаю",
   sectionTitle: "Что я",
@@ -150,7 +152,9 @@ export const translations = {
       fullVersion: "Full version",
       openWork: "Open work",
     },
-
+all: "All",
+images: "Images",
+videos: "Videos",
     services: {
   sectionLabel: "What I do",
   sectionTitle: "What I",
