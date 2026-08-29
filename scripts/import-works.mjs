@@ -16,8 +16,11 @@
  * info.txt — по одному значению на строку либо ключ: значение
  *
  *   title: Neon District
+ *   title_en: Neon District EN
  *   client: Бренд одежды
+ *   client_en: Clothing Brand
  *   role: Промо-ролик, полный цикл
+ *   role_en: Promo video, full cycle
  *   year: 2026
  *   tags: Midjourney, Runway Gen-3
  *   mux: aBcD1234efGh          # только для видео
@@ -53,7 +56,7 @@ function parseInfo(dir) {
 
   const positional = [];
   for (const line of lines) {
-    const match = line.match(/^([a-zA-Z]+)\s*:\s*(.+)$/);
+    const match = line.match(/^([a-zA-Z_]+)\s*:\s*(.+)$/);
     if (match) info[match[1].toLowerCase()] = match[2].trim();
     else positional.push(line);
   }
@@ -129,8 +132,11 @@ for (const dirName of entries) {
     kind,
     slug,
     title,
+    title_en: info.title_en ?? "",
     client: info.client ?? "",
+    client_en: info.client_en ?? "",
     role: info.role ?? "",
+    role_en: info.role_en ?? "",
     year: info.year ?? String(new Date().getFullYear()),
     tags: (info.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean),
     cover: { ...cover, alt: `${title} — обложка` },
@@ -160,11 +166,26 @@ const serialize = (w) => {
     `    kind: "${w.kind}",`,
     `    slug: "${escape(w.slug)}",`,
     `    title: "${escape(w.title)}",`,
+  ];
+
+  if (w.title_en) lines.push(`    title_en: "${escape(w.title_en)}",`);
+
+  lines.push(
     `    client: "${escape(w.client)}",`,
+  );
+
+  if (w.client_en) lines.push(`    client_en: "${escape(w.client_en)}",`);
+
+  lines.push(
     `    role: "${escape(w.role)}",`,
+  );
+
+  if (w.role_en) lines.push(`    role_en: "${escape(w.role_en)}",`);
+
+  lines.push(
     `    year: "${escape(w.year)}",`,
     `    tags: [${w.tags.map((t) => `"${escape(t)}"`).join(", ")}],`,
-  ];
+  );
 
   if (w.kind === "video") lines.push(`    muxPlaybackId: "${escape(w.muxPlaybackId)}",`);
 
@@ -216,17 +237,12 @@ export function getWorkBySlug(slug: string): Work | undefined {
   return works.find((w) => w.slug === slug);
 }
 
-/** Все slug — для generateStaticParams */
+/** Все slug — для generateStaticParams при сборке */
 export const workSlugs = works.map((w) => w.slug);
 `;
 
 writeFileSync(OUTPUT, output, "utf8");
-
-const videos = works.filter((w) => w.kind === "video").length;
-const photos = works.length - videos;
-console.log(`${OUTPUT}: ${works.length} работ (видео ${videos}, фото ${photos})`);
-
+console.log(`Успешно! Сгенерировано ${works.length} работ в ${OUTPUT}`);
 if (warnings.length > 0) {
-  console.log("\nПредупреждения:");
-  for (const w of warnings) console.log(`  ${w}`);
+  console.warn("\nПредупреждения:\n" + warnings.join("\n"));
 }
