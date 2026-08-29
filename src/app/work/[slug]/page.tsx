@@ -9,9 +9,14 @@ interface Params {
 }
 
 /** 16 статических адресов на сборке — ссылка на кейс работает напрямую */
-export function generateStaticParams() {
+export const dynamicParams = false;
+
+export const generateStaticParams = async () => {
+  if (workSlugs.length === 0) {
+    return [{ slug: "placeholder" }];
+  }
   return workSlugs.map((slug) => ({ slug }));
-}
+};
 
 /** Свои OG-теги на каждый кейс: превью в Telegram будет по работе */
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
