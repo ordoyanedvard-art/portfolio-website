@@ -71,7 +71,7 @@ export default function About({ locale }: AboutProps) {
         <Reveal className="lg:col-span-5" delay={0.12} y={24}>
           <div className="relative aspect-[4/5] overflow-hidden bg-surface">
             <Image
-              src="/portrait.jpg"
+              src="/portfolio-website/portrait.jpg"
               alt={`${site.name} — портрет`}
               fill
               sizes="(max-width: 1024px) 100vw, 40vw"
