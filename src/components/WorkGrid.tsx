@@ -61,7 +61,7 @@ export default function WorkGrid({ initialSlug }: WorkGridProps) {
       />
 
       <Reveal className="gutter mt-12 lg:mt-16" y={16}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+        <div className="grid items-start grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           {works.map((work, i) => (
             <WorkCard key={work.slug} work={work} index={i} onOpen={open} />
           ))}
