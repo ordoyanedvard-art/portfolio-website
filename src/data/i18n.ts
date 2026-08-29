@@ -8,7 +8,13 @@ export const translations = {
       about: "ОБО МНЕ",
       contact: "КОНТАКТЫ",
     },
+    identity: {
+      name: "Эдвард Ордоян",
+    },
 
+    stats: {
+      values: ["1,2M+", "CTR +40%", "3 ДНЯ → 10 Ч", "XR SCHOOL"],
+    },
     accessibility: {
       skipToWork: "Перейти к работам",
     },
@@ -111,7 +117,13 @@ export const translations = {
       about: "ABOUT",
       contact: "CONTACT",
     },
+    identity: {
+      name: "Edvard Ordoyan",
+    },
 
+    stats: {
+      values: ["1.2M+", "CTR +40%", "3 DAYS → 10 H", "XR SCHOOL"],
+    },
     accessibility: {
       skipToWork: "Skip to work",
     },
