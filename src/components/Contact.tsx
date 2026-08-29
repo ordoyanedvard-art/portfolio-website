@@ -1,12 +1,17 @@
 import { site } from "@/data/site";
 import Reveal from "./Reveal";
-
+import { translations, type Locale } from "@/data/i18n";
 /**
  * 07 — Контакты.
  * Крупный заголовок на весь экран, почта огромной строкой, соцсети рядом.
  * Формы нет — вариант A: прямая связь.
  */
-export default function Contact() {
+interface ContactProps {
+  locale: Locale;
+}
+
+export default function Contact({ locale }: ContactProps) {
+  const t = translations[locale];
   const links = [
     { label: "Telegram", href: site.telegram },
     { label: "Behance", href: site.behance },
@@ -22,15 +27,17 @@ export default function Contact() {
         <Reveal>
           <div className="flex items-baseline gap-4 border-b border-border pb-5">
             <span className="label text-accent">07</span>
-            <span className="label text-muted">Contact</span>
+            <span className="label text-muted">{t.contact.sectionLabel}</span>
           </div>
         </Reveal>
 
         <Reveal delay={0.08}>
-          <h2 className="display mt-10 text-[11vw] leading-[0.86] lg:text-[8vw]">
-            Start a
-            <span className="block text-accent">project</span>
-          </h2>
+         <h2 className="display mt-10 text-[11vw] leading-[0.86] lg:text-[8vw]">
+  {t.contact.sectionTitle}
+  <span className="block text-accent">
+    {t.contact.sectionAccent}
+  </span>
+</h2>
         </Reveal>
 
         <Reveal delay={0.16}>
