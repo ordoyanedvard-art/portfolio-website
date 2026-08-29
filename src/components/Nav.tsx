@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { site } from "@/data/site";
 import { translations, type Locale } from "@/data/i18n";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +68,7 @@ export default function Nav({ locale }: NavProps) {
           }}
           className="label text-text transition-colors hover:text-accent"
         >
-          {site.name}
+          {t.identity.name}
         </a>
 
         <nav aria-label={locale === "ru" ? "Основная навигация" : "Main navigation"}>
