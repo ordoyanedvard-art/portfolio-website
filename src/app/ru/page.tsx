@@ -1,5 +1,5 @@
-import HomePage from "../page";
+import PageShell from "@/components/PageShell";
 
 export default function RussianPage() {
-  return <HomePage />;
+  return <PageShell locale="ru" />;
 }
