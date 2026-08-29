@@ -105,7 +105,6 @@ const filteredWorks =
           {filteredWorks.map((work, i) => (
   <WorkCard key={work.slug} work={work} index={i} onOpen={open} />
 ))}
-          ))}
         </div>
       </Reveal>
 
