@@ -16,7 +16,7 @@ export const site = {
   location: "Удалённо / Проект / Фулл-тайм",
   email: "ordoyanedvard@gmail.com",
   /** Телеграма в резюме нет — оставлено пустым, ссылка не отрисуется */
-  telegram: "",
+  telegram: "https://t.me/ordoooya",
   behance: "https://behance.net/a30ea301",
   instagram: "https://instagram.com/ordooan.ai",
   /** Адрес продакшена на GitHub Pages */
