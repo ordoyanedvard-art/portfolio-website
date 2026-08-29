@@ -79,7 +79,7 @@ export default function About({ locale }: AboutProps) {
             />
           </div>
           <p className="label mt-4 text-muted">
-            {site.name} · {site.role}
+            {t.identity.name} · {site.role}
           </p>
         </Reveal>
       </div>
