@@ -1,4 +1,4 @@
-import { services } from "@/data/site";
+
 import { translations, type Locale } from "@/data/i18n";
 import { pad } from "@/lib/utils";
 import Reveal from "./Reveal";
@@ -28,7 +28,7 @@ export default function Services({ locale }: ServicesProps) {
 />
 
       <div className="gutter mt-12 lg:mt-16">
-        {services.map((service, i) => (
+        {t.services.items.map((service, i) => (
           <Reveal key={service.title} delay={i * 0.06} y={20}>
             <div className="group grid grid-cols-1 gap-4 border-t border-border py-8 transition-colors hover:border-accent/50 md:grid-cols-12 md:gap-8 lg:py-10">
               <span className="label text-accent md:col-span-1">
