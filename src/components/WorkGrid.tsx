@@ -97,11 +97,6 @@ const filteredWorks =
     [getWorkPath]
   );
 
-  const goTo = useCallback((slug: string) => {
-    setActiveSlug(slug);
-    window.history.replaceState({ slug }, "", `/work/${slug}`);
-  }, []);
-
   /* Кнопки «назад» и «вперёд» в браузере */
   useEffect(() => {
     const onPopState = (e: PopStateEvent) => {
