@@ -137,6 +137,8 @@ for (const dirName of entries) {
     client_en: info.client_en ?? "",
     role: info.role ?? "",
     role_en: info.role_en ?? "",
+    description: info.description ?? "",
+    description_en: info.description_en ?? "",
     year: info.year ?? String(new Date().getFullYear()),
     tags: (info.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean),
     cover: { ...cover, alt: `${title} — обложка` },
@@ -181,7 +183,13 @@ const serialize = (w) => {
   );
 
   if (w.role_en) lines.push(`    role_en: "${escape(w.role_en)}",`);
+if (w.description) {
+  lines.push(`    description: "${escape(w.description)}",`);
+}
 
+if (w.description_en) {
+  lines.push(`    description_en: "${escape(w.description_en)}",`);
+}
   lines.push(
     `    year: "${escape(w.year)}",`,
     `    tags: [${w.tags.map((t) => `"${escape(t)}"`).join(", ")}],`,
