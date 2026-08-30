@@ -212,19 +212,19 @@ export default function Lightbox({
           <div className="flex min-h-0 flex-1 items-center justify-center p-4 sm:p-8">
             {work.kind === "video" && work.muxPlaybackId ? (
               <div
-                className={cn(
-                  "max-h-full w-auto",
-                  aspectClass(work.aspect),
-                  "h-full"
-                )}
-              >
+  className={cn(
+    "relative min-h-0 w-full max-w-full overflow-hidden",
+    "sm:h-full sm:w-auto",
+    aspectClass(work.aspect)
+  )}
+>
                 <MuxPlayer
                   playbackId={work.muxPlaybackId}
                   streamType="on-demand"
                   autoPlay
                   accentColor="#ff2a1f"
                   metadata={{ video_title: work.title }}
-                  className="h-full w-full"
+                  className="h-full w-full [&::part(video)]:object-contain"
                   style={{ height: "100%", width: "100%" }}
                 />
               </div>
