@@ -72,18 +72,18 @@ const filteredWorks =
     [getWorkPath]
   );
 
-  const close = useCallback(() => {
+    const close = useCallback(() => {
     setActiveSlug(undefined);
 
-    const siteRoot = getSiteRoot();
+    const basePath = "/portfolio-website";
+    const localePath = locale === "en" ? "/en" : "/ru";
 
-    // replaceState не создаёт лишнюю запись в истории браузера
     window.history.replaceState(
       {},
       "",
-      `${siteRoot}/#work`
+      `${basePath}${localePath}/#work`
     );
-  }, [getSiteRoot]);
+  }, [locale]);
 
   const goTo = useCallback(
     (slug: string) => {
