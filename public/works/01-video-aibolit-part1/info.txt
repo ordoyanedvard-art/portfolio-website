@@ -1,11 +1,17 @@
-title_ru: Доктор Айболит: Он придет на помощь — Эп. 1
-title_en: Dr. Aibolit: He's Here to Help — Ep. 1
-client_ru: Личный проект
+title: Доктор Айболит — Часть 1
+title_en: Dr. Aibolit — Part 1
+
+client: Личный проект
 client_en: Personal Project
-role_ru: Режиссура, Сценарий, AI-генерация & Анимация
-role_en: Directing, Script, AI Generation & Animation
+
+role: Режиссура, сценарий, AI-генерация и анимация
+role_en: Directing, screenwriting, AI generation and animation
+
+description: Первая часть авторской двухсерийной истории о Докторе Айболите, переосмысленной в мрачной хоррор-эстетике.
+description_en: The first part of an original two-part story about Dr. Aibolit, reimagined through a dark horror aesthetic.
+
 year: 2026
-tags: Gpt Image 2, Grok imagine 1, Topaz AI, CapCut, Adobe Premier
+tags: GPT Image 2, Grok Imagine, Topaz AI, CapCut, Adobe Premiere
 mux: 7MTct1iPqzr013MrtFAxy49dScKuKEoAIzDjt2XijNA00
 featured: true
 aspect: 16/9
