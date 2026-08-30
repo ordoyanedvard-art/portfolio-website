@@ -103,7 +103,13 @@ const filteredWorks =
 
   <div className="grid items-start grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           {filteredWorks.map((work, i) => (
-  <WorkCard key={work.slug} work={work} index={i} onOpen={open} />
+  <WorkCard
+  key={work.slug}
+  work={work}
+  index={i}
+  onOpen={open}
+  locale={locale}
+/>
 ))}
         </div>
       </Reveal>
@@ -114,6 +120,7 @@ const filteredWorks =
           index={activeIndex}
           total={filteredWorks.length}
           onClose={close}
+          locale={locale}
           onPrev={() =>
   goTo(
     filteredWorks[
