@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { Work } from "@/lib/types";
 import { aspectClass, cn, pad } from "@/lib/utils";
-
+import type { Locale } from "@/data/i18n";
 const MuxPlayer = dynamic(() => import("@mux/mux-player-react"), {
   ssr: false,
 });
@@ -18,6 +18,7 @@ interface LightboxProps {
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
+  locale?: Locale;
 }
 
 /**
@@ -32,7 +33,19 @@ export default function Lightbox({
   onClose,
   onPrev,
   onNext,
+  locale = "ru"
 }: LightboxProps) {
+    const title =
+    locale === "en" && work.title_en ? work.title_en : work.title;
+  const client =
+    locale === "en" && work.client_en ? work.client_en : work.client;
+  const role =
+    locale === "en" && work.role_en ? work.role_en : work.role;
+  const description =
+    locale === "en" && work.description_en
+      ? work.description_en
+      : work.description;
+  
   const reduce = useReducedMotion();
   const panelRef = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState(0);
@@ -244,10 +257,17 @@ export default function Lightbox({
           <div className="shrink-0 border-t border-border px-4 py-5 sm:px-8">
             <div className="flex flex-wrap items-end justify-between gap-6">
               <div className="min-w-0">
-                <h3 className="display text-2xl sm:text-3xl">{work.title}</h3>
-                <p className="label mt-3 text-muted">
-                  {work.client} · {work.role}
-                </p>
+                <h3 className="display text-2xl sm:text-3xl">{title}</h3>
+
+<p className="label mt-3 text-muted">
+  {client} · {role}
+</p>
+
+{description ? (
+  <p className="mt-4 max-w-2xl text-sm leading-6 text-muted">
+    {description}
+  </p>
+) : null}
                 <ul className="mt-4 flex flex-wrap gap-2">
                   {work.tags.map((tag) => (
                     <li
