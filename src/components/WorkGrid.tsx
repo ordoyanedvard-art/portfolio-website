@@ -33,16 +33,69 @@ const filteredWorks =
   filter === "all"
     ? works
     : works.filter((work) => work.kind === filter);
-  const open = useCallback((slug: string) => {
-    setActiveSlug(slug);
-    window.history.pushState({ slug }, "", `/work/${slug}`);
+    /**
+   * Возвращает правильный путь сайта с учётом GitHub Pages
+   * и выбранного языка.
+   */
+  const getSiteRoot = useCallback(() => {
+    const parts = window.location.pathname.split("/").filter(Boolean);
+
+    // Первый сегмент — имя репозитория: portfolio-website
+    const basePath = parts[0] ? `/${parts[0]}` : "";
+
+    // Сохраняем язык, если открыта английская или русская версия
+    const localePath =
+      parts[1] === "en" || parts[1] === "ru" ? `/${parts[1]}` : "";
+
+    return `${basePath}${localePath}`;
   }, []);
+
+  const getWorkPath = useCallback(
+    (slug: string) => {
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      const basePath = parts[0] ? `/${parts[0]}` : "";
+
+      return `${basePath}/work/${slug}/`;
+    },
+    []
+  );
+
+  const open = useCallback(
+    (slug: string) => {
+      setActiveSlug(slug);
+      window.history.pushState(
+        { slug },
+        "",
+        getWorkPath(slug)
+      );
+    },
+    [getWorkPath]
+  );
 
   const close = useCallback(() => {
     setActiveSlug(undefined);
-    // Возвращаем адрес на главную с якорем, чтобы не потерять место на странице
-    window.history.pushState({}, "", "/#work");
-  }, []);
+
+    const siteRoot = getSiteRoot();
+
+    // replaceState не создаёт лишнюю запись в истории браузера
+    window.history.replaceState(
+      {},
+      "",
+      `${siteRoot}/#work`
+    );
+  }, [getSiteRoot]);
+
+  const goTo = useCallback(
+    (slug: string) => {
+      setActiveSlug(slug);
+      window.history.replaceState(
+        { slug },
+        "",
+        getWorkPath(slug)
+      );
+    },
+    [getWorkPath]
+  );
 
   const goTo = useCallback((slug: string) => {
     setActiveSlug(slug);
