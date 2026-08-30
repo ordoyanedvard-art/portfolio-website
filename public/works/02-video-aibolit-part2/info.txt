@@ -1,11 +1,17 @@
-title_ru: Доктор Айболит: Он придет на помощь — Эп. 2
-title_en: Dr. Aibolit: He's Here to Help — Ep. 2
-client_ru: Личный проект
+title: Доктор Айболит — Часть 2
+title_en: Dr. Aibolit — Part 2
+
+client: Личный проект
 client_en: Personal Project
-role_ru: Режиссура, Сценарий, AI-генерация & Анимация
-role_en: Directing, Script, AI Generation & Animation
+
+role: Режиссура, сценарий, AI-генерация и анимация
+role_en: Directing, screenwriting, AI generation and animation
+
+description: Вторая часть авторской двухсерийной истории о Докторе Айболите, продолжающая развитие мрачного визуального мира и сюжета.
+description_en: The second part of an original two-part story about Dr. Aibolit, continuing the development of its dark visual world and narrative.
+
 year: 2026
-tags: Gpt Image 2, Seedance 2.0, Topaz Ai, CapCut, Adobe Premier
+tags: GPT Image 2, Seedance 2, Topaz AI, CapCut, Adobe Premiere
 mux: JFqGwCdQGKBKhft3UHCl9AN01F22XkiBQCoH7XbvCDoE
 featured: true
 aspect: 16/9
