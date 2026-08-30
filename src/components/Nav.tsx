@@ -92,13 +92,7 @@ export default function Nav({ locale }: NavProps) {
                 className="label group inline-flex items-center gap-2 border border-border px-3 py-2.5 text-text transition-colors hover:border-accent hover:text-accent sm:px-4"
               >
                 <span className="hidden sm:inline">{t.nav.contact}</span>
-                <span className="sm:hidden">→</span>
-                <span
-                  aria-hidden
-                  className="transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-                >
-                  ↗
-                </span>
+                <span className="sm:hidden">↗</span>
               </a>
             </li>
 
