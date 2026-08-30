@@ -28,6 +28,9 @@ export interface WorkBase {
   /** Что делал — 1–2 строки */
   role: string;
   role_en?: string;
+  /** Описание проекта */
+description?: string;
+description_en?: string;
   /** Год */
   year: string;
   /** Теги: инструменты и тип работы */
