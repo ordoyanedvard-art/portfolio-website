@@ -1,5 +1,5 @@
-title: After Hours
-title_en: After Hours
+title: All-Black Fashion Series Ai
+title_en:  All-Black Fashion Series Ai
 
 client: Личный проект
 client_en: Personal project
