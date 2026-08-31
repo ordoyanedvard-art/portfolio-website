@@ -50,8 +50,14 @@ export default function Lightbox({
   const panelRef = useRef<HTMLDivElement>(null);
 const framesRef = useRef<HTMLDivElement>(null);
 const [frame, setFrame] = useState(0);
-  const [zoomedFrame, setZoomedFrame] = useState<number | null>(null);
-  const isPhoto = work.kind === "photo";
+const [zoomed, setZoomed] = useState(false);
+const [zoomScale, setZoomScale] = useState(1);
+
+const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+const pinchStartDistanceRef = useRef<number | null>(null);
+const pinchStartScaleRef = useRef(1);
+
+const isPhoto = work.kind === "photo";
   /* Стабильная ссылка на массив: иначе эффект предзагрузки
      перезапускается на каждый рендер */
   const frames = useMemo(
