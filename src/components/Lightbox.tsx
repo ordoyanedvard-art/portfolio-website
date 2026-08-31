@@ -186,7 +186,7 @@ export default function Lightbox({
           ref={panelRef}
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
-          className="relative flex h-full w-full max-w-[110rem] flex-col outline-none"
+         className="relative flex h-[100dvh] w-full max-w-[110rem] flex-col overflow-y-auto overscroll-contain outline-none"
         >
           {/* Шапка */}
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-4 sm:px-8">
@@ -209,26 +209,31 @@ export default function Lightbox({
           </div>
 
           {/* Медиа */}
-          <div className="flex min-h-0 flex-1 items-center justify-center p-4 sm:p-8">
-            {work.kind === "video" && work.muxPlaybackId ? (
-              <div
-  className={cn(
-    "relative min-h-0 w-full max-w-full overflow-hidden",
-    "sm:h-full sm:w-auto",
-    aspectClass(work.aspect)
-  )}
->
-                <MuxPlayer
-                  playbackId={work.muxPlaybackId}
-                  streamType="on-demand"
-                  autoPlay
-                  accentColor="#ff2a1f"
-                  metadata={{ video_title: work.title }}
-                  className="h-full w-full [&::part(video)]:object-contain"
-                  style={{ height: "100%", width: "100%" }}
-                />
-              </div>
-            ) : (
+          <div className="flex min-h-0 shrink-0 items-center justify-center p-4 sm:flex-1 sm:p-8">
+  {work.kind === "video" && work.muxPlaybackId ? (
+    <div
+      className={cn(
+        "relative flex max-h-full max-w-full shrink-0 items-center justify-center overflow-hidden",
+        aspectClass(work.aspect),
+        "h-full w-auto"
+      )}
+    >
+      <MuxPlayer
+        playbackId={work.muxPlaybackId}
+        streamType="on-demand"
+        autoPlay
+        accentColor="#ff2a1f"
+        metadata={{ video_title: title }}
+        className="h-full w-full"
+        style={{
+          height: "100%",
+          width: "100%",
+          maxWidth: "100%",
+          maxHeight: "100%",
+        }}
+      />
+    </div>
+  ) : (
               <div
   className={cn(
     "relative h-full w-full overflow-visible",
