@@ -1,0 +1,17 @@
+title: INDIWD — Mission Passed
+title_en: INDIWD — Mission Passed
+
+client: INDIWD
+client_en: INDIWD
+
+role: Концепция, режиссура, AI-визуализация и монтаж
+role_en: Concept, direction, AI visualization and editing
+
+description: Рекламный ролик для бренда одежды INDIWD, посвящённый худи в эстетике GTA: San Andreas. Герой приезжает к магазину бренда на лоурайдере, приобретает худи и демонстрирует его детали — логотип INDIWD на рукаве и принт «GROVE STREET 4-LIFE» на груди. Ролик выполнен в стилистике игровой миссии с интерфейсом, игровой валютой и финальной надписью «MISSION PASSED! RESPECT +».
+description_en: A commercial for the clothing brand INDIWD, featuring a hoodie inspired by the aesthetic of GTA: San Andreas. The protagonist arrives at the brand’s store in a lowrider, purchases the hoodie, and showcases its details — the INDIWD logo on the sleeve and the “GROVE STREET 4-LIFE” print on the chest. The video is presented as a game mission, complete with an in-game interface, currency display, and the final message “MISSION PASSED! RESPECT +”.
+
+year: 2026
+tags: INDIWD, GTA: San Andreas, Fashion Film, Product Advertising, Streetwear, AI Video, Nano Banana Pro, Grok Imagine
+mux: Ar1TLnrQPttihIB3UcuMA6zdG4f5jk6j302LBJm8DqqU
+featured: false
+aspect: 16/9
