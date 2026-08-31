@@ -1,0 +1,17 @@
+title: Маша и Медведь: Переосмысление
+title_en: Masha and the Bear: Reimagined
+
+client: Личный проект
+client_en: Personal project
+
+role: Концепция, AI-генерация, режиссура и монтаж
+role_en: Concept, AI generation, direction and editing
+
+description: Короткое кинематографичное переосмысление вселенной «Маши и Медведя». Знакомые персонажи показаны в мрачной зимней атмосфере таинственного леса — как фрагмент более взрослой и напряжённой истории.
+description_en: A short cinematic reimagining of the Masha and the Bear universe. Familiar characters are placed in the dark, atmospheric setting of a mysterious winter forest, suggesting a more mature and suspenseful story.
+
+year: 2026
+tags: GPT Image, Seedance 2.0, CapCut
+mux: lkfbhWkOwtRqX5DQMiXEil9tfQoG02fQvBT0130201VIhfk
+featured: false
+aspect: 16/9
