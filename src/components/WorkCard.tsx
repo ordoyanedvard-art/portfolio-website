@@ -47,8 +47,7 @@ export default function WorkCard({ work, index, onOpen, locale = "ru" }: WorkCar
         "group relative block h-fit w-full self-start overflow-hidden bg-surface text-left",
         // Свой курсор есть только на широких экранах с мышью,
         // там и прячем системный
-        "cursor-pointer lg:cursor-none",
-        work.featured && "lg:col-span-2"
+        "cursor-pointer lg:cursor-none"
       )}
     >
       <div className={cn("relative overflow-hidden", aspectClass(work.aspect))}>
