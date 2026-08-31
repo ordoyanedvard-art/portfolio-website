@@ -236,7 +236,7 @@ const prevFrame = useCallback(() => {
           </div>
 
                     {/* Медиа */}
-<div className="min-h-0 flex-1 overflow-hidden p-4 sm:p-8">
+<div className="h-[64dvh] min-h-[420px] flex-none overflow-hidden px-0 py-4 sm:h-auto sm:min-h-0 sm:flex-1 sm:p-8">
   {work.kind === "video" && work.muxPlaybackId ? (
     <div
       className={cn(
@@ -295,8 +295,7 @@ const prevFrame = useCallback(() => {
         <div
           key={`${image.src}-${imageIndex}`}
           className={cn(
-  "relative h-full w-[28vw] max-w-[420px] min-w-[280px] shrink-0 snap-center",
-  "max-sm:w-[78vw] max-sm:min-w-0",
+  "relative h-full w-[88vw] max-w-none min-w-0 shrink-0 snap-center sm:w-[28vw] sm:max-w-[420px] sm:min-w-[280px]",
   zoomed && imageIndex === frame && "z-10"
 )}
         >
