@@ -316,7 +316,6 @@ const resetZoom = useCallback(() => {
       }}
     >
       {frames.map((image, imageIndex) => (
-        <div
          <div
   key={`${image.src}-${imageIndex}`}
   className={cn(
