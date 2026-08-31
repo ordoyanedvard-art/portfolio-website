@@ -149,16 +149,18 @@ const filteredWorks =
     ))}
   </div>
 
-  <div className="grid items-start grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-          {filteredWorks.map((work, i) => (
-  <WorkCard
-  key={work.slug}
-  work={work}
-  index={i}
-  onOpen={open}
-  locale={locale}
-/>
-))}
+  <div className="columns-1 gap-3 sm:columns-2 sm:gap-4 lg:columns-3">
+  {filteredWorks.map((work, i) => (
+    <div key={work.slug} className="mb-3 break-inside-avoid sm:mb-4">
+      <WorkCard
+        work={work}
+        index={i}
+        onOpen={open}
+        locale={locale}
+      />
+    </div>
+  ))}
+</div>
         </div>
       </Reveal>
 
