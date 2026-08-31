@@ -119,7 +119,7 @@ const nextZoomedFrame = useCallback(() => {
     const nextIndex = zoomedFrame + 1;
     setZoomedFrame(nextIndex);
     setFrame(nextIndex);
-    scrollToFrame(previousIndex)
+    scrollToFrame(nextIndex)
   }}, [zoomedFrame, isPhoto, frames.length, setFrame, scrollToFrame]);
 
 const prevZoomedFrame = useCallback(() => {
