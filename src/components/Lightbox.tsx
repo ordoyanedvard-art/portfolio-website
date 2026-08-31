@@ -314,14 +314,21 @@ const prevFrame = useCallback(() => {
             priority={imageIndex === 0}
             onClick={() => {
   setFrame(imageIndex);
-  setZoomedFrame(imageIndex);
+  setZoomed(true);
+  setZoomScale(1.35);
 }}
             className={cn(
-  "object-contain transition-transform duration-500 ease-out",
+  "object-contain transition-transform duration-300 ease-out",
   imageIndex === frame
-    ? "scale-100 cursor-zoom-in"
-    : "scale-[0.78] opacity-60"
+    ? "cursor-zoom-in"
+    : "opacity-60"
 )}
+style={{
+  transform:
+    imageIndex === frame
+      ? `scale(${zoomed ? zoomScale : 1})`
+      : "scale(1)",
+}}
           />
         </div>
       ))}
