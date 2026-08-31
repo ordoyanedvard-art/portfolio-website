@@ -1,0 +1,17 @@
+title: Эндшпиль и TumaniYo — Golova
+title_en: Endspiel & TumaniYo — Golova
+
+client: Личный проект
+client_en: Personal project
+
+role: Концепция, AI-визуализация и монтаж
+role_en: Concept, AI visualization and editing
+
+description: Вертикальный визуальный сниппет на трек «Golova» исполнителей Эндшпиль и TumaniYo. Мрачная чёрно-белая эстетика, собранная вокруг образов одиночества, городской ночи и внутреннего напряжения. Визуальная часть создана с использованием генеративных инструментов и смонтирована в CapCut.
+description_en: A vertical visual snippet for “Golova” by Endspiel and TumaniYo. Built around a dark black-and-white aesthetic, the piece explores loneliness, the urban night and inner tension. The visuals were created with generative tools and edited in CapCut.
+
+year: 2026
+tags: Endspiel, TumaniYo, Golova, Music Video, Visual Snippet, Black and White, AI Video, GPT Image 2, Seedance 2.5, CapCut
+mux: FiZgXB1Ts01M55K7jgxfnCiEXp5LWC200Cq5AXT5w2Y2Q
+featured: false
+aspect: 9/16
