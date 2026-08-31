@@ -174,7 +174,7 @@ export default function Lightbox({
       <motion.div
         {...fade}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-bg/95 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-start justify-center overflow-hidden bg-bg/95 backdrop-blur-sm"
         role="dialog"
         aria-modal="true"
         aria-label={`${work.title} — ${work.client}`}
@@ -186,7 +186,7 @@ export default function Lightbox({
           ref={panelRef}
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
-         className="relative flex h-[100dvh] w-full max-w-[110rem] flex-col overflow-y-auto overscroll-contain outline-none"
+         className="relative flex min-h-0 h-[100dvh] w-full max-w-[110rem] flex-col overflow-y-scroll overscroll-y-contain touch-pan-y outline-none"
         >
           {/* Шапка */}
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-4 sm:px-8">
@@ -224,7 +224,7 @@ export default function Lightbox({
                   autoPlay
                   accentColor="#ff2a1f"
                   metadata={{ video_title: title }}
-                  className="block h-full w-full"
+                  className="block h-full w-full touch-pan-y"
                   style={{
                     height: "100%",
                     width: "100%",
