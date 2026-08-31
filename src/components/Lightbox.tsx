@@ -64,16 +64,18 @@ export default function Lightbox({
   }, [work.slug]);
 
   /* Стоп скролла страницы, пока открыт просмотрщик */
-  useEffect(() => {
-    const lenis = window.__lenis;
-    lenis?.stop();
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      lenis?.start();
-      document.body.style.overflow = prevOverflow;
-    };
-  }, []);
+ useEffect(() => {
+  const prevOverflow = document.body.style.overflow;
+  const prevTouchAction = document.body.style.touchAction;
+
+  document.body.style.overflow = "hidden";
+  document.body.style.touchAction = "none";
+
+  return () => {
+    document.body.style.overflow = prevOverflow;
+    document.body.style.touchAction = prevTouchAction;
+  };
+}, []);
 
   const nextFrame = useCallback(() => {
     if (isPhoto && frame < frames.length - 1) setFrame((f) => f + 1);
@@ -186,7 +188,11 @@ export default function Lightbox({
           ref={panelRef}
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
-         className="relative flex min-h-0 h-[100dvh] w-full max-w-[110rem] flex-col overflow-y-scroll overscroll-y-contain touch-pan-y outline-none"
+         className="relative flex h-[100dvh] min-h-0 w-full max-w-[110rem] flex-col overflow-y-auto overscroll-contain outline-none"
+          style={{
+  WebkitOverflowScrolling: "touch",
+  touchAction: "pan-y",
+}}
         >
           {/* Шапка */}
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-4 sm:px-8">
