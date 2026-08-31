@@ -237,7 +237,7 @@ const resetZoom = useCallback(() => {
           ref={panelRef}
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
-         className="relative flex h-[100dvh] min-h-0 w-full max-w-[110rem] flex-col overflow-y-auto overscroll-contain outline-none"
+         className="relative flex h-[100dvh] min-h-0 w-full max-w-none flex-col overflow-hidden overscroll-contain outline-none"
           style={{
   WebkitOverflowScrolling: "touch",
   touchAction: "pan-y",
@@ -266,7 +266,7 @@ const resetZoom = useCallback(() => {
                     {/* Медиа */}
 <div
   className={cn(
-    "relative h-[64dvh] min-h-[420px] flex-none px-0 py-4 sm:h-auto sm:min-h-0 sm:flex-1 sm:p-8",
+    "relative h-[calc(100dvh-110px)] min-h-0 flex-none px-0 py-4 sm:h-auto sm:min-h-0 sm:flex-1 sm:p-8",
     zoomed ? "overflow-visible" : "overflow-hidden"
   )}
 >
@@ -333,10 +333,10 @@ const resetZoom = useCallback(() => {
          <div
   key={`${image.src}-${imageIndex}`}
   className={cn(
-    "relative flex h-full w-[72vw] max-w-[520px] min-w-0 shrink-0 snap-center items-center justify-center transition-transform duration-500 ease-out sm:w-[30vw]",
+    "relative flex h-full min-w-0 shrink-0 snap-center items-center justify-center transition-transform duration-500 ease-out",
     imageIndex === frame
-      ? "z-10 scale-100"
-      : "z-0 scale-[0.72] opacity-55"
+      ? "z-10 w-[88vw] sm:w-[72vw]"
+      : "z-0 w-[46vw] opacity-55 sm:w-[24vw]"
   )}
 >
   <div
@@ -505,24 +505,24 @@ onPointerCancel={(event) => {
 }}
   >
     <Image
-      src={image.src}
-      alt={image.alt}
-      fill
-      sizes="(max-width: 768px) 72vw, 520px"
-      priority={imageIndex === 0}
-      draggable={false}
-      className="pointer-events-none object-contain"
-      style={{
-  transform:
-    imageIndex === frame
-      ? `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoomed ? zoomScale : 1})`
-      : "scale(1)",
-  transformOrigin: "center center",
-  transition: dragRef.current
-    ? "none"
-    : "transform 220ms ease-out",
-}}
-    />
+  src={image.src}
+  alt={image.alt}
+  fill
+  sizes="90vw"
+  priority={imageIndex === 0}
+  draggable={false}
+  className="pointer-events-none object-contain"
+  style={{
+    transform:
+      imageIndex === frame
+        ? `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoomed ? zoomScale : 1})`
+        : "scale(1)",
+    transformOrigin: "center center",
+    transition: dragRef.current
+      ? "none"
+      : "transform 220ms ease-out",
+  }}
+/>
   </div>
 </div>
       ))}
