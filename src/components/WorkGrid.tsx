@@ -161,7 +161,7 @@ const filteredWorks =
     </div>
   ))}
 </div>
-        </div>
+        
       </Reveal>
 
       {activeWork ? (
