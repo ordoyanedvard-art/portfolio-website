@@ -114,42 +114,19 @@ const prevFrame = useCallback(() => {
     onPrev();
   }
 }, [isPhoto, frame, onPrev, scrollToFrame]);
-const closeZoom = useCallback(() => {
-  setZoomedFrame(null);
-}, []);
 
-const nextZoomedFrame = useCallback(() => {
-  if (zoomedFrame === null || !isPhoto) return;
-
-  if (zoomedFrame < frames.length - 1) {
-    const nextIndex = zoomedFrame + 1;
-    setZoomedFrame(nextIndex);
-    setFrame(nextIndex);
-    scrollToFrame(nextIndex)
-  }}, [zoomedFrame, isPhoto, frames.length, setFrame, scrollToFrame]);
-
-const prevZoomedFrame = useCallback(() => {
-  if (zoomedFrame === null || !isPhoto) return;
-
-  if (zoomedFrame > 0) {
-    const previousIndex = zoomedFrame - 1;
-    setZoomedFrame(previousIndex);
-    setFrame(previousIndex);
-    scrollToFrame(previousIndex)
-  }
-}, [zoomedFrame, isPhoto, scrollToFrame]);
-  
   /* Клавиатура + запирание фокуса внутри диалога */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
   e.preventDefault();
 
-  if (zoomedFrame !== null) {
-  setZoomedFrame(null);
-} else {
-  onClose();
-}
+  if (zoomed) {
+    setZoomed(false);
+    setZoomScale(1);
+  } else {
+    onClose();
+  }
 
   return;
 }
@@ -194,14 +171,7 @@ const prevZoomedFrame = useCallback(() => {
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
- }, [
-  onClose,
-  nextFrame,
-  prevFrame,
-  nextZoomedFrame,
-  prevZoomedFrame,
-  zoomedFrame,
-]);
+ }, [onClose, nextFrame, prevFrame, zoomed]);
 
   /* Фокус на панель при открытии, возврат — на плитку после закрытия */
   useEffect(() => {
