@@ -384,74 +384,7 @@ style={{
               </div>
             </div>
           </div>
-        </motion.div>
-
-        {/* Полноэкранное увеличение фотографии */}
-        {zoomedFrame !== null && frames[zoomedFrame] ? (
-          <div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-4 sm:p-8"
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Увеличенный кадр ${zoomedFrame + 1}`}
-            onClick={closeZoom}
-          >
-            <button
-              type="button"
-              onClick={closeZoom}
-              aria-label="Закрыть увеличение"
-              className="absolute right-4 top-4 z-10 flex size-11 items-center justify-center text-2xl text-white/70 transition-colors hover:text-white sm:right-8 sm:top-8"
-            >
-              ✕
-            </button>
-
-            {zoomedFrame > 0 ? (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  prevZoomedFrame();
-                }}
-                aria-label="Предыдущая фотография"
-                className="absolute left-3 top-1/2 z-10 flex size-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/30 text-2xl text-white transition-colors hover:border-white hover:bg-black/60 sm:left-8"
-              >
-                ←
-              </button>
-            ) : null}
-
-            <div
-              className="relative h-[88dvh] w-[92vw] max-w-[1400px]"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <Image
-                src={frames[zoomedFrame].src}
-                alt={frames[zoomedFrame].alt}
-                fill
-                priority
-                sizes="100vw"
-                className="object-contain"
-              />
-            </div>
-
-            {zoomedFrame < frames.length - 1 ? (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  nextZoomedFrame();
-                }}
-                aria-label="Следующая фотография"
-                className="absolute right-3 top-1/2 z-10 flex size-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/30 text-2xl text-white transition-colors hover:border-white hover:bg-black/60 sm:right-8"
-              >
-                →
-              </button>
-            ) : null}
-
-            <span className="absolute bottom-4 left-1/2 -translate-x-1/2 label text-white/70">
-              {pad(zoomedFrame + 1)} / {pad(frames.length)}
-            </span>
-          </div>
-        ) : null}
-        
+        </motion.div>     
       </motion.div>
     </AnimatePresence>
   );
