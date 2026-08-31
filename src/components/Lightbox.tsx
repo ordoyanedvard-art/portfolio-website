@@ -321,7 +321,7 @@ const resetZoom = useCallback(() => {
       className={cn(
   "flex h-full w-full items-center snap-x snap-mandatory gap-0 overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
   zoomed
-    ? "overflow-visible"
+    ? "overflow-hidden"
     : "overflow-x-auto overflow-y-hidden"
 )}
       style={{
