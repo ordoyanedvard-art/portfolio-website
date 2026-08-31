@@ -285,7 +285,7 @@ const prevFrame = useCallback(() => {
 
         setFrame(closestIndex);
       }}
-      className="flex h-full w-full snap-x snap-mandatory gap-6 overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex h-full w-full snap-x snap-mandatory gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       style={{
         WebkitOverflowScrolling: "touch",
         touchAction: "pan-x",
@@ -295,9 +295,10 @@ const prevFrame = useCallback(() => {
         <div
           key={`${image.src}-${imageIndex}`}
           className={cn(
-            "relative h-full w-[86vw] max-w-[900px] shrink-0 snap-center",
-            zoomed && imageIndex === frame && "z-10"
-          )}
+  "relative h-full w-[42vw] max-w-[520px] min-w-[280px] shrink-0 snap-center",
+  "max-sm:w-[78vw] max-sm:min-w-0",
+  zoomed && imageIndex === frame && "z-10"
+)}
         >
           <Image
             src={image.src}
