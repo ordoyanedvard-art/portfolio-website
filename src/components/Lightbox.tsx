@@ -52,7 +52,17 @@ const framesRef = useRef<HTMLDivElement>(null);
 const [frame, setFrame] = useState(0);
 const [zoomed, setZoomed] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
+const [pan, setPan] = useState({ x: 0, y: 0 });
 
+const dragRef = useRef<{
+  pointerId: number;
+  startX: number;
+  startY: number;
+  originX: number;
+  originY: number;
+} | null>(null);
+
+const didDragRef = useRef(false);
 const pointersRef = useRef(
   new Map<number, { x: number; y: number }>()
 );
@@ -119,8 +129,12 @@ const prevFrame = useCallback(() => {
 const resetZoom = useCallback(() => {
   setZoomed(false);
   setZoomScale(1);
+  setPan({ x: 0, y: 0 });
+
   pointersRef.current.clear();
   pinchStartDistanceRef.current = null;
+  dragRef.current = null;
+  didDragRef.current = false;
 }, []);
   /* Клавиатура + запирание фокуса внутри диалога */
   useEffect(() => {
@@ -211,7 +225,7 @@ const resetZoom = useCallback(() => {
       <motion.div
         {...fade}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="fixed inset-0 z-50 flex items-start justify-center overflow-hidden bg-bg/95 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-start justify-center overflow-hidden bg-black/70 backdrop-blur-md"
         role="dialog"
         aria-modal="true"
         aria-label={`${work.title} — ${work.client}`}
@@ -327,11 +341,11 @@ const resetZoom = useCallback(() => {
 >
   <div
     className={cn(
-      "relative h-full w-full",
-      imageIndex === frame && zoomed
-        ? "z-20 touch-none"
-        : "z-0"
-    )}
+  "relative h-full w-full select-none touch-none",
+  imageIndex === frame && zoomed
+    ? "z-20 cursor-grab active:cursor-grabbing"
+    : "z-0"
+)}
     onWheel={(event) => {
       if (imageIndex !== frame) return;
 
@@ -345,97 +359,150 @@ const resetZoom = useCallback(() => {
         return Math.min(4, Math.max(1, current + change));
       });
     }}
-    onPointerDown={(event) => {
-      if (imageIndex !== frame) return;
+   onPointerDown={(event) => {
+  if (imageIndex !== frame || !zoomed) return;
 
-      event.currentTarget.setPointerCapture(event.pointerId);
+  event.currentTarget.setPointerCapture(event.pointerId);
 
-      pointersRef.current.set(event.pointerId, {
-        x: event.clientX,
-        y: event.clientY,
-      });
+  pointersRef.current.set(event.pointerId, {
+    x: event.clientX,
+    y: event.clientY,
+  });
 
-      if (pointersRef.current.size === 2) {
-        const points = Array.from(
-          pointersRef.current.values()
-        );
+  if (pointersRef.current.size === 1) {
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: pan.x,
+      originY: pan.y,
+    };
 
-        const first = points[0];
-        const second = points[1];
+    didDragRef.current = false;
+  }
 
-        pinchStartDistanceRef.current = Math.hypot(
-          second.x - first.x,
-          second.y - first.y
-        );
+  if (pointersRef.current.size === 2) {
+    dragRef.current = null;
 
-        pinchStartScaleRef.current = zoomScale;
-      }
-    }}
-    onPointerMove={(event) => {
-      if (imageIndex !== frame) return;
-      if (!pointersRef.current.has(event.pointerId)) return;
+    const points = Array.from(
+      pointersRef.current.values()
+    );
 
-      pointersRef.current.set(event.pointerId, {
-        x: event.clientX,
-        y: event.clientY,
-      });
+    const first = points[0];
+    const second = points[1];
 
-      if (
-        pointersRef.current.size === 2 &&
-        pinchStartDistanceRef.current !== null
-      ) {
-        const points = Array.from(
-          pointersRef.current.values()
-        );
+    pinchStartDistanceRef.current = Math.hypot(
+      second.x - first.x,
+      second.y - first.y
+    );
 
-        const first = points[0];
-        const second = points[1];
+    pinchStartScaleRef.current = zoomScale;
+  }
+}}
 
-        const distance = Math.hypot(
-          second.x - first.x,
-          second.y - first.y
-        );
+onPointerMove={(event) => {
+  if (imageIndex !== frame || !zoomed) return;
+  if (!pointersRef.current.has(event.pointerId)) return;
 
-        const ratio =
-          distance / pinchStartDistanceRef.current;
+  pointersRef.current.set(event.pointerId, {
+    x: event.clientX,
+    y: event.clientY,
+  });
 
-        setZoomed(true);
-        setZoomScale(
-          Math.min(
-            4,
-            Math.max(
-              1,
-              pinchStartScaleRef.current * ratio
-            )
-          )
-        );
-      }
-    }}
-    onPointerUp={(event) => {
-      pointersRef.current.delete(event.pointerId);
+  if (
+    pointersRef.current.size === 2 &&
+    pinchStartDistanceRef.current !== null
+  ) {
+    const points = Array.from(
+      pointersRef.current.values()
+    );
 
-      if (pointersRef.current.size < 2) {
-        pinchStartDistanceRef.current = null;
-      }
-    }}
-    onPointerCancel={(event) => {
-      pointersRef.current.delete(event.pointerId);
-      pinchStartDistanceRef.current = null;
-    }}
+    const first = points[0];
+    const second = points[1];
+
+    const distance = Math.hypot(
+      second.x - first.x,
+      second.y - first.y
+    );
+
+    const ratio =
+      distance / pinchStartDistanceRef.current;
+
+    setZoomScale(
+      Math.min(
+        4,
+        Math.max(
+          1,
+          pinchStartScaleRef.current * ratio
+        )
+      )
+    );
+
+    return;
+  }
+
+  if (
+    pointersRef.current.size === 1 &&
+    dragRef.current?.pointerId === event.pointerId
+  ) {
+    const deltaX =
+      event.clientX - dragRef.current.startX;
+
+    const deltaY =
+      event.clientY - dragRef.current.startY;
+
+    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+      didDragRef.current = true;
+    }
+
+    setPan({
+      x: dragRef.current.originX + deltaX,
+      y: dragRef.current.originY + deltaY,
+    });
+  }
+}}
+
+onPointerUp={(event) => {
+  pointersRef.current.delete(event.pointerId);
+
+  if (dragRef.current?.pointerId === event.pointerId) {
+    dragRef.current = null;
+  }
+
+  if (pointersRef.current.size < 2) {
+    pinchStartDistanceRef.current = null;
+  }
+}}
+
+onPointerCancel={(event) => {
+  pointersRef.current.delete(event.pointerId);
+
+  if (dragRef.current?.pointerId === event.pointerId) {
+    dragRef.current = null;
+  }
+
+  pinchStartDistanceRef.current = null;
+}}
     onClick={() => {
-      if (imageIndex !== frame) {
-        scrollToFrame(imageIndex);
-        resetZoom();
-        return;
-      }
+  if (didDragRef.current) {
+    didDragRef.current = false;
+    return;
+  }
 
-      if (!zoomed) {
-        setZoomed(true);
-        setZoomScale(1.35);
-      } else if (zoomScale <= 1.05) {
-        resetZoom();
-      }
-    }}
+  if (imageIndex !== frame) {
+    scrollToFrame(imageIndex);
+    resetZoom();
+    return;
+  }
+
+  if (!zoomed) {
+    setZoomed(true);
+    setZoomScale(1.35);
+    setPan({ x: 0, y: 0 });
+  } else if (zoomScale <= 1.05) {
+    resetZoom();
+  }
+}}
   >
     <Image
       src={image.src}
@@ -444,14 +511,17 @@ const resetZoom = useCallback(() => {
       sizes="(max-width: 768px) 72vw, 520px"
       priority={imageIndex === 0}
       draggable={false}
-      className="object-contain"
+      className="pointer-events-none object-contain"
       style={{
-        transform:
-          imageIndex === frame
-            ? `scale(${zoomed ? zoomScale : 1})`
-            : "scale(1)",
-        transformOrigin: "center center",
-      }}
+  transform:
+    imageIndex === frame
+      ? `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoomed ? zoomScale : 1})`
+      : "scale(1)",
+  transformOrigin: "center center",
+  transition: dragRef.current
+    ? "none"
+    : "transform 220ms ease-out",
+}}
     />
   </div>
 </div>
