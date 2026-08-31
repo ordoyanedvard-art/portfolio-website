@@ -48,7 +48,8 @@ export default function Lightbox({
   
   const reduce = useReducedMotion();
   const panelRef = useRef<HTMLDivElement>(null);
-  const [frame, setFrame] = useState(0);
+const framesRef = useRef<HTMLDivElement>(null);
+const [frame, setFrame] = useState(0);
   const [zoomed, setZoomed] = useState(false);
   const isPhoto = work.kind === "photo";
   /* Стабильная ссылка на массив: иначе эффект предзагрузки
@@ -77,15 +78,36 @@ export default function Lightbox({
   };
 }, []);
 
-  const nextFrame = useCallback(() => {
-    if (isPhoto && frame < frames.length - 1) setFrame((f) => f + 1);
-    else onNext();
-  }, [isPhoto, frame, frames.length, onNext]);
+  const scrollToFrame = useCallback((nextIndex: number) => {
+  const container = framesRef.current;
+  const item = container?.children[nextIndex] as HTMLElement | undefined;
 
-  const prevFrame = useCallback(() => {
-    if (isPhoto && frame > 0) setFrame((f) => f - 1);
-    else onPrev();
-  }, [isPhoto, frame, onPrev]);
+  if (item) {
+    item.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }
+
+  setFrame(nextIndex);
+}, []);
+
+const nextFrame = useCallback(() => {
+  if (isPhoto && frame < frames.length - 1) {
+    scrollToFrame(frame + 1);
+  } else {
+    onNext();
+  }
+}, [isPhoto, frame, frames.length, onNext, scrollToFrame]);
+
+const prevFrame = useCallback(() => {
+  if (isPhoto && frame > 0) {
+    scrollToFrame(frame - 1);
+  } else {
+    onPrev();
+  }
+}, [isPhoto, frame, onPrev, scrollToFrame]);
 
   /* Клавиатура + запирание фокуса внутри диалога */
   useEffect(() => {
@@ -169,7 +191,6 @@ export default function Lightbox({
         exit: { opacity: 0, y: 16 },
       };
 
-  const current = isPhoto ? frames[frame] : work.cover;
 
   return (
     <AnimatePresence>
@@ -215,54 +236,91 @@ export default function Lightbox({
           </div>
 
                     {/* Медиа */}
-          <div className="flex min-h-0 flex-none items-center justify-center p-4 sm:flex-1 sm:p-8">
-            {work.kind === "video" && work.muxPlaybackId ? (
-              <div
-                className={cn(
-                  "relative aspect-auto w-full max-w-full shrink-0 overflow-hidden",
-                  aspectClass(work.aspect),
-                  "h-auto sm:h-full sm:w-auto"
-                )}
-              >
-                <MuxPlayer
-                  playbackId={work.muxPlaybackId}
-                  streamType="on-demand"
-                  autoPlay
-                  accentColor="#ff2a1f"
-                  metadata={{ video_title: title }}
-                  className="block h-full w-full touch-pan-y"
-                  style={{
-                    height: "100%",
-                    width: "100%",
-                    maxWidth: "100%",
-                  }}
-                />
-              </div>
-            ) : (
-              <div
-  className={cn(
-    "relative h-full w-full overflow-visible",
-    zoomed && "z-10"
-  )}
->
-  <Image
-    src={current.src}
-    alt={current.alt}
-    fill
-    sizes="100vw"
-    priority
-    onClick={() => setZoomed((value) => !value)}
-    className={cn(
-      "object-contain transition-transform duration-500 ease-out",
-      zoomed
-        ? "scale-[1.8] cursor-zoom-out"
-        : "scale-100 cursor-zoom-in"
-    )}
-  />
-</div>
-            )}
-          </div>
+<div className="min-h-0 flex-1 overflow-hidden p-4 sm:p-8">
+  {work.kind === "video" && work.muxPlaybackId ? (
+    <div
+      className={cn(
+        "relative mx-auto h-full w-full max-w-full overflow-hidden",
+        aspectClass(work.aspect),
+        "sm:w-auto"
+      )}
+    >
+      <MuxPlayer
+        playbackId={work.muxPlaybackId}
+        streamType="on-demand"
+        autoPlay
+        accentColor="#ff2a1f"
+        metadata={{ video_title: title }}
+        className="block h-full w-full touch-pan-y"
+        style={{
+          height: "100%",
+          width: "100%",
+          maxWidth: "100%",
+        }}
+      />
+    </div>
+  ) : (
+    <div
+      ref={framesRef}
+      onScroll={(event) => {
+        const container = event.currentTarget;
+        const items = Array.from(container.children) as HTMLElement[];
 
+        if (items.length === 0) return;
+
+        const center = container.scrollLeft + container.clientWidth / 2;
+
+        let closestIndex = 0;
+        let closestDistance = Infinity;
+
+        items.forEach((item, itemIndex) => {
+          const itemCenter = item.offsetLeft + item.offsetWidth / 2;
+          const distance = Math.abs(itemCenter - center);
+
+          if (distance < closestDistance) {
+            closestDistance = distance;
+            closestIndex = itemIndex;
+          }
+        });
+
+        setFrame(closestIndex);
+      }}
+      className="flex h-full w-full snap-x snap-mandatory gap-6 overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      style={{
+        WebkitOverflowScrolling: "touch",
+        touchAction: "pan-x",
+      }}
+    >
+      {frames.map((image, imageIndex) => (
+        <div
+          key={`${image.src}-${imageIndex}`}
+          className={cn(
+            "relative h-full w-[86vw] max-w-[900px] shrink-0 snap-center",
+            zoomed && imageIndex === frame && "z-10"
+          )}
+        >
+          <Image
+            src={image.src}
+            alt={image.alt}
+            fill
+            sizes="(max-width: 768px) 86vw, 900px"
+            priority={imageIndex === 0}
+            onClick={() => {
+              setFrame(imageIndex);
+              setZoomed((value) => !value);
+            }}
+            className={cn(
+              "object-contain transition-transform duration-500 ease-out",
+              zoomed && imageIndex === frame
+                ? "scale-[1.8] cursor-zoom-out"
+                : "scale-100 cursor-zoom-in"
+            )}
+          />
+        </div>
+      ))}
+    </div>
+  )}
+</div>
           {/* Подвал: подписи, счётчик кадров, навигация */}
           <div className="shrink-0 border-t border-border px-4 py-5 sm:px-8">
             <div className="flex flex-wrap items-end justify-between gap-6">
@@ -291,11 +349,7 @@ export default function Lightbox({
               </div>
 
               <div className="flex items-center gap-6">
-                {isPhoto && frames.length > 1 ? (
-                  <span className="label text-muted">
-                    Кадр {pad(frame + 1)} / {pad(frames.length)}
-                  </span>
-                ) : null}
+              
 
                 {work.externalUrl ? (
                   <a
@@ -313,25 +367,6 @@ export default function Lightbox({
                     </span>
                   </a>
                 ) : null}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={prevFrame}
-                    aria-label="Предыдущее"
-                    className="flex size-11 items-center justify-center border border-border text-text transition-colors hover:border-accent hover:text-accent"
-                  >
-                    <span aria-hidden>←</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={nextFrame}
-                    aria-label="Следующее"
-                    className="flex size-11 items-center justify-center border border-border text-text transition-colors hover:border-accent hover:text-accent"
-                  >
-                    <span aria-hidden>→</span>
-                  </button>
-                </div>
               </div>
             </div>
           </div>
