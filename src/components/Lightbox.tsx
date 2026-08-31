@@ -51,12 +51,13 @@ export default function Lightbox({
 const framesRef = useRef<HTMLDivElement>(null);
 const [frame, setFrame] = useState(0);
 const [zoomed, setZoomed] = useState(false);
-const [zoomScale, setZoomScale] = useState(1);
+  const [zoomScale, setZoomScale] = useState(1);
 
-const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+const pointersRef = useRef(
+  new Map<number, { x: number; y: number }>()
+);
 const pinchStartDistanceRef = useRef<number | null>(null);
 const pinchStartScaleRef = useRef(1);
-
 const isPhoto = work.kind === "photo";
   /* Стабильная ссылка на массив: иначе эффект предзагрузки
      перезапускается на каждый рендер */
@@ -114,7 +115,13 @@ const prevFrame = useCallback(() => {
     onPrev();
   }
 }, [isPhoto, frame, onPrev, scrollToFrame]);
-
+  
+const resetZoom = useCallback(() => {
+  setZoomed(false);
+  setZoomScale(1);
+  pointersRef.current.clear();
+  pinchStartDistanceRef.current = null;
+}, []);
   /* Клавиатура + запирание фокуса внутри диалога */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -243,7 +250,12 @@ const prevFrame = useCallback(() => {
           </div>
 
                     {/* Медиа */}
-<div className="h-[64dvh] min-h-[420px] flex-none overflow-hidden px-0 py-4 sm:h-auto sm:min-h-0 sm:flex-1 sm:p-8">
+<div
+  className={cn(
+    "relative h-[64dvh] min-h-[420px] flex-none px-0 py-4 sm:h-auto sm:min-h-0 sm:flex-1 sm:p-8",
+    zoomed ? "overflow-visible" : "overflow-hidden"
+  )}
+>
   {work.kind === "video" && work.muxPlaybackId ? (
     <div
       className={cn(
@@ -292,44 +304,159 @@ const prevFrame = useCallback(() => {
 
         setFrame(closestIndex);
       }}
-      className="flex h-full w-full snap-x snap-mandatory gap-1 overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className={cn(
+  "flex h-full w-full items-center snap-x snap-mandatory gap-0 overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+  zoomed
+    ? "overflow-visible"
+    : "overflow-x-auto overflow-y-hidden"
+)}
       style={{
         WebkitOverflowScrolling: "touch",
-        touchAction: "pan-x",
+        touchAction: zoomed ? "none" : "pan-x",
       }}
     >
       {frames.map((image, imageIndex) => (
         <div
           key={`${image.src}-${imageIndex}`}
           className={cn(
-  "relative h-full w-[88vw] max-w-none min-w-0 shrink-0 snap-center sm:w-[28vw] sm:max-w-[420px] sm:min-w-[280px]",
-  imageIndex === frame ? "z-10" : "z-0"
+  "relative flex h-full w-[72vw] max-w-[520px] min-w-0 shrink-0 snap-center items-center justify-center transition-transform duration-500 ease-out sm:w-[30vw]",
+  imageIndex === frame
+    ? "z-10 scale-100"
+    : "z-0 scale-[0.72] opacity-55"
 )}
         >
-          <Image
-            src={image.src}
-            alt={image.alt}
-            fill
-            sizes="(max-width: 768px) 86vw, 900px"
-            priority={imageIndex === 0}
-            onClick={() => {
-  setFrame(imageIndex);
-  setZoomed(true);
-  setZoomScale(1.35);
-}}
-            className={cn(
-  "object-contain transition-transform duration-300 ease-out",
-  imageIndex === frame
-    ? "cursor-zoom-in"
-    : "opacity-60"
-)}
-style={{
-  transform:
-    imageIndex === frame
-      ? `scale(${zoomed ? zoomScale : 1})`
-      : "scale(1)",
-}}
-          />
+         <div
+  className={cn(
+    "relative h-full w-full",
+    imageIndex === frame && zoomed
+      ? "z-20 touch-none"
+      : "z-0"
+  )}
+  onWheel={(event) => {
+    if (imageIndex !== frame) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    setZoomed(true);
+
+    setZoomScale((current) => {
+      const next =
+        current + (event.deltaY < 0 ? 0.2 : -0.2);
+
+      return Math.min(4, Math.max(1, next));
+    });
+  }}
+  onPointerDown={(event) => {
+    if (imageIndex !== frame) return;
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    pointersRef.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+
+    if (pointersRef.current.size === 2) {
+      const points = Array.from(
+        pointersRef.current.values()
+      );
+
+      const first = points[0];
+      const second = points[1];
+
+      pinchStartDistanceRef.current = Math.hypot(
+        second.x - first.x,
+        second.y - first.y
+      );
+
+      pinchStartScaleRef.current = zoomScale;
+    }
+  }}
+  onPointerMove={(event) => {
+    if (imageIndex !== frame) return;
+    if (!pointersRef.current.has(event.pointerId)) return;
+
+    pointersRef.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+
+    if (
+      pointersRef.current.size === 2 &&
+      pinchStartDistanceRef.current !== null
+    ) {
+      const points = Array.from(
+        pointersRef.current.values()
+      );
+
+      const first = points[0];
+      const second = points[1];
+
+      const currentDistance = Math.hypot(
+        second.x - first.x,
+        second.y - first.y
+      );
+
+      const ratio =
+        currentDistance / pinchStartDistanceRef.current;
+
+      setZoomed(true);
+
+      setZoomScale(
+        Math.min(
+          4,
+          Math.max(
+            1,
+            pinchStartScaleRef.current * ratio
+          )
+        )
+      );
+    }
+  }}
+  onPointerUp={(event) => {
+    pointersRef.current.delete(event.pointerId);
+
+    if (pointersRef.current.size < 2) {
+      pinchStartDistanceRef.current = null;
+    }
+  }}
+  onPointerCancel={(event) => {
+    pointersRef.current.delete(event.pointerId);
+    pinchStartDistanceRef.current = null;
+  }}
+  onClick={() => {
+    if (imageIndex !== frame) {
+      scrollToFrame(imageIndex);
+      resetZoom();
+      return;
+    }
+
+    if (!zoomed) {
+      setZoomed(true);
+      setZoomScale(1.35);
+    } else if (zoomScale <= 1.05) {
+      resetZoom();
+    }
+  }}
+>
+  <Image
+    src={image.src}
+    alt={image.alt}
+    fill
+    sizes="(max-width: 768px) 72vw, 520px"
+    priority={imageIndex === 0}
+    draggable={false}
+    className="object-contain"
+    style={{
+      transform:
+        imageIndex === frame
+          ? `scale(${zoomed ? zoomScale : 1})`
+          : "scale(1)",
+      transformOrigin: "center center",
+    }}
+  />
+</div>
         </div>
       ))}
     </div>
