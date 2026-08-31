@@ -132,24 +132,12 @@ const prevFrame = useCallback(() => {
 }
       if (e.key === "ArrowRight") {
   e.preventDefault();
-
-  if (zoomedFrame !== null) {
-    nextZoomedFrame();
-  } else {
-    nextFrame();
-  }
-
+  nextFrame();
   return;
 }
       if (e.key === "ArrowLeft") {
   e.preventDefault();
-
-  if (zoomedFrame !== null) {
-    prevZoomedFrame();
-  } else {
-    prevFrame();
-  }
-
+  prevFrame();
   return;
 }
       if (e.key !== "Tab") return;
