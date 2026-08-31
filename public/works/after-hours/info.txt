@@ -1,0 +1,16 @@
+title: After Hours
+title_en: After Hours
+
+client: Личный проект
+client_en: Personal project
+
+role: Концепция, AI-генерация и ретушь
+role_en: Concept, AI generation and retouching
+
+description: Авторская fashion-фотосессия, построенная вокруг образа героини в тёмном подземном пространстве. Серия исследует одиночество, силуэт и состояние между движением и остановкой. Изображения созданы с помощью GPT Image 2, ретушь и финальная обработка выполнены в Tezza.
+description_en: An editorial fashion photo series centered around a female figure moving through a dark underground space. The series explores solitude, silhouette and the feeling of being suspended between movement and stillness. The images were generated with GPT Image 2, with retouching and final editing completed in Tezza.
+
+year: 2026
+tags: Fashion, Editorial, AI Photography, GPT Image 2, Tezza, Portrait, Dark Aesthetic, Cinematic, Personal Project
+featured: false
+aspect: 4/5
