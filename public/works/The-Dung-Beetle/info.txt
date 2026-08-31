@@ -1,0 +1,17 @@
+title: Жук
+title_en: The Dung Beetle
+
+client: Личный проект
+client_en: Personal project
+
+role: Концепция, AI-визуализация и монтаж
+role_en: Concept, AI visualization and editing
+
+description: Короткая 3D-анимация о маленьком жуке-навознике, который сталкивается с неожиданной проблемой во время своей ежедневной работы. Комедийная история с выразительным персонажем, детализированной природной средой и лёгким драматическим настроением. Визуальная часть создана с помощью GPT Image 2 и Seedance 2.5, монтаж выполнен в CapCut.
+description_en: A short 3D animation about a small dung beetle who encounters an unexpected problem during his daily work. A comedic story with an expressive character, a detailed natural environment and a lightly dramatic mood. The visuals were created with GPT Image 2 and Seedance 2.5, and the edit was completed in CapCut.
+
+year: 2026
+tags: 3D Animation, Character Animation, AI Video, GPT Image 2, Seedance 2.5, CapCut, Dung Beetle, Short Film
+mux: PQIUT7gJysF72VcHmhv3D9mcMwzNmh1c9SClfnJaN02Y
+featured: false
+aspect: 16/9
