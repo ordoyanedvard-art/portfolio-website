@@ -50,7 +50,7 @@ export default function Lightbox({
   const panelRef = useRef<HTMLDivElement>(null);
 const framesRef = useRef<HTMLDivElement>(null);
 const [frame, setFrame] = useState(0);
-  const [zoomed, setZoomed] = useState(false);
+  const [zoomedFrame, setZoomedFrame] = useState<number | null>(null);
   const isPhoto = work.kind === "photo";
   /* Стабильная ссылка на массив: иначе эффект предзагрузки
      перезапускается на каждый рендер */
@@ -108,31 +108,67 @@ const prevFrame = useCallback(() => {
     onPrev();
   }
 }, [isPhoto, frame, onPrev, scrollToFrame]);
+const closeZoom = useCallback(() => {
+  setZoomedFrame(null);
+}, []);
 
+const nextZoomedFrame = useCallback(() => {
+  if (zoomedFrame === null || !isPhoto) return;
+
+  if (zoomedFrame < frames.length - 1) {
+    const nextIndex = zoomedFrame + 1;
+    setZoomedFrame(nextIndex);
+    setFrame(nextIndex);
+    scrollToFrame(previousIndex)
+  }}, [zoomedFrame, isPhoto, frames.length, setFrame, scrollToFrame]);
+
+const prevZoomedFrame = useCallback(() => {
+  if (zoomedFrame === null || !isPhoto) return;
+
+  if (zoomedFrame > 0) {
+    const previousIndex = zoomedFrame - 1;
+    setZoomedFrame(previousIndex);
+    setFrame(previousIndex);
+    scrollToFrame(previousIndex)
+  }
+}, [zoomedFrame, isPhoto, scrollToFrame]);
+  
   /* Клавиатура + запирание фокуса внутри диалога */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
   e.preventDefault();
 
-  if (zoomed) {
-    setZoomed(false);
-  } else {
-    onClose();
-  }
+  if (zoomedFrame !== null) {
+  setZoomedFrame(null);
+} else {
+  onClose();
+}
 
   return;
 }
       if (e.key === "ArrowRight") {
-        e.preventDefault();
-        nextFrame();
-        return;
-      }
+  e.preventDefault();
+
+  if (zoomedFrame !== null) {
+    nextZoomedFrame();
+  } else {
+    nextFrame();
+  }
+
+  return;
+}
       if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        prevFrame();
-        return;
-      }
+  e.preventDefault();
+
+  if (zoomedFrame !== null) {
+    prevZoomedFrame();
+  } else {
+    prevFrame();
+  }
+
+  return;
+}
       if (e.key !== "Tab") return;
 
       const focusables = panelRef.current?.querySelectorAll<HTMLElement>(
@@ -152,7 +188,14 @@ const prevFrame = useCallback(() => {
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose, nextFrame, prevFrame]);
+ }, [
+  onClose,
+  nextFrame,
+  prevFrame,
+  nextZoomedFrame,
+  prevZoomedFrame,
+  zoomedFrame,
+]);
 
   /* Фокус на панель при открытии, возврат — на плитку после закрытия */
   useEffect(() => {
@@ -296,7 +339,7 @@ const prevFrame = useCallback(() => {
           key={`${image.src}-${imageIndex}`}
           className={cn(
   "relative h-full w-[88vw] max-w-none min-w-0 shrink-0 snap-center sm:w-[28vw] sm:max-w-[420px] sm:min-w-[280px]",
-  zoomed && imageIndex === frame && "z-10"
+  imageIndex === frame ? "z-10" : "z-0"
 )}
         >
           <Image
@@ -306,15 +349,15 @@ const prevFrame = useCallback(() => {
             sizes="(max-width: 768px) 86vw, 900px"
             priority={imageIndex === 0}
             onClick={() => {
-              setFrame(imageIndex);
-              setZoomed((value) => !value);
-            }}
+  setFrame(imageIndex);
+  setZoomedFrame(imageIndex);
+}}
             className={cn(
-              "object-contain transition-transform duration-500 ease-out",
-              zoomed && imageIndex === frame
-                ? "scale-[1.8] cursor-zoom-out"
-                : "scale-100 cursor-zoom-in"
-            )}
+  "object-contain transition-transform duration-500 ease-out",
+  imageIndex === frame
+    ? "scale-100 cursor-zoom-in"
+    : "scale-[0.78] opacity-60"
+)}
           />
         </div>
       ))}
@@ -371,6 +414,73 @@ const prevFrame = useCallback(() => {
             </div>
           </div>
         </motion.div>
+
+        {/* Полноэкранное увеличение фотографии */}
+        {zoomedFrame !== null && frames[zoomedFrame] ? (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-4 sm:p-8"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Увеличенный кадр ${zoomedFrame + 1}`}
+            onClick={closeZoom}
+          >
+            <button
+              type="button"
+              onClick={closeZoom}
+              aria-label="Закрыть увеличение"
+              className="absolute right-4 top-4 z-10 flex size-11 items-center justify-center text-2xl text-white/70 transition-colors hover:text-white sm:right-8 sm:top-8"
+            >
+              ✕
+            </button>
+
+            {zoomedFrame > 0 ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  prevZoomedFrame();
+                }}
+                aria-label="Предыдущая фотография"
+                className="absolute left-3 top-1/2 z-10 flex size-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/30 text-2xl text-white transition-colors hover:border-white hover:bg-black/60 sm:left-8"
+              >
+                ←
+              </button>
+            ) : null}
+
+            <div
+              className="relative h-[88dvh] w-[92vw] max-w-[1400px]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Image
+                src={frames[zoomedFrame].src}
+                alt={frames[zoomedFrame].alt}
+                fill
+                priority
+                sizes="100vw"
+                className="object-contain"
+              />
+            </div>
+
+            {zoomedFrame < frames.length - 1 ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  nextZoomedFrame();
+                }}
+                aria-label="Следующая фотография"
+                className="absolute right-3 top-1/2 z-10 flex size-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/30 text-2xl text-white transition-colors hover:border-white hover:bg-black/60 sm:right-8"
+              >
+                →
+              </button>
+            ) : null}
+
+            <span className="absolute bottom-4 left-1/2 -translate-x-1/2 label text-white/70">
+              {pad(zoomedFrame + 1)} / {pad(frames.length)}
+            </span>
+          </div>
+        ) : null}
+        
       </motion.div>
     </AnimatePresence>
   );
