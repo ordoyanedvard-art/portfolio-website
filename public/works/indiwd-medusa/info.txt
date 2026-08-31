@@ -1,0 +1,17 @@
+title: INDIWD — Medusa
+title_en: INDIWD — Medusa
+
+client: INDIWD
+client_en: INDIWD
+
+role: Концепция, режиссура, AI-визуализация и монтаж
+role_en: Concept, direction, AI visualization and editing
+
+description: Атмосферный рекламный ролик для новой коллекции INDIWD Medusa. Образ Медузы Горгоны раскрывается через чёрную оверсайз-футболку с выразительным принтом на спине, змеевидные волосы и мрачный мистический ландшафт с окаменевшими фигурами. Холодная цветовая палитра, туман и элементы тёмного фэнтези создают ощущение древнего проклятия, превращая презентацию одежды в короткую визуальную историю.
+description_en: An atmospheric commercial for INDIWD’s new Medusa collection. The image of Medusa is conveyed through a black oversized T-shirt with a striking back print, snake-like hair, and a dark mystical landscape filled with petrified figures. A cold color palette, fog, and dark fantasy elements create the feeling of an ancient curse, turning the fashion presentation into a short visual story.
+
+year: 2026
+tags: INDIWD, Medusa, Fashion Film, Product Advertising, Dark Fantasy, CGI, Midjourney, Kling 2.5, CapCut
+mux: d0202ES93LckUl2aB7aJndmyRAv69v02Z4FARyufDI029LM
+featured: false
+aspect: 9/16
