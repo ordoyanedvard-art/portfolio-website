@@ -318,26 +318,21 @@ const resetZoom = useCallback(() => {
 
         setFrame(closestIndex);
       }}
-      className={cn(
-  "flex h-full w-full items-center snap-x snap-mandatory gap-0 overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-  zoomed
-    ? "overflow-hidden"
-    : "overflow-x-auto overflow-y-hidden"
-)}
-      style={{
-        WebkitOverflowScrolling: "touch",
-        touchAction: zoomed ? "none" : "pan-x",
-      }}
+      className="flex h-full w-full items-center gap-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+style={{
+  WebkitOverflowScrolling: "touch",
+  touchAction: "pan-x",
+}}
     >
       {frames.map((image, imageIndex) => (
          <div
   key={`${image.src}-${imageIndex}`}
   className={cn(
-    "relative flex h-full min-w-0 shrink-0 snap-center items-center justify-center transition-transform duration-500 ease-out",
-    imageIndex === frame
-      ? "z-10 w-[88vw] sm:w-[72vw]"
-      : "z-0 w-[46vw] opacity-55 sm:w-[24vw]"
-  )}
+  "relative flex h-full w-[72vw] min-w-0 shrink-0 snap-center items-center justify-center",
+  imageIndex === frame
+    ? "z-10 opacity-100"
+    : "z-0 opacity-55"
+)}
 >
   <div
     className={cn(
