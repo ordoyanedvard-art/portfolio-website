@@ -21,11 +21,19 @@ interface LightboxProps {
   locale?: Locale;
 }
 
+const MIN_SCALE = 1;
+const MAX_SCALE = 5;
+
+const clampScale = (value: number) =>
+  Math.min(MAX_SCALE, Math.max(MIN_SCALE, value));
+
 /**
  * Просмотрщик работы поверх страницы.
- * Esc — закрыть, ← → — соседние работы (у фото сначала кадры внутри серии).
- * Скролл страницы под просмотрщиком остановлен, фокус заперт внутри.
- * Zoom вынесен в отдельный полноэкранный слой поверх карусели.
+ * Esc — закрыть, ← → — соседние кадры/работы.
+ * Zoom — отдельный полноэкранный слой:
+ *   открытие в масштабе 1 (кадр целиком, по центру);
+ *   колесо / пинч — масштаб, drag — перемещение;
+ *   свайп или стрелки — соседний кадр без выхода из zoom.
  */
 export default function Lightbox({
   work,
@@ -67,21 +75,56 @@ export default function Lightbox({
   const pointersRef = useRef(
     new Map<number, { x: number; y: number }>()
   );
-  const pinchStartDistanceRef = useRef<number | null>(null);
-  const pinchStartScaleRef = useRef(1);
+
+  /* Все стартовые значения пинча: масштаб и позиция считаются
+     от начала жеста, а не накапливаются, — поэтому нет дёрганья */
+  const pinchRef = useRef<{
+    dist: number;
+    scale: number;
+    midX: number;
+    midY: number;
+    panX: number;
+    panY: number;
+  } | null>(null);
+
+  /* Защита от слишком частой навигации свайпом по трекпаду */
+  const wheelNavRef = useRef(0);
+
   const isPhoto = work.kind === "photo";
 
-  /* Стабильная ссылка на массив: иначе эффект предзагрузки
-     перезапускается на каждый рендер */
   const frames = useMemo(
     () => (work.kind === "photo" ? work.images : []),
     [work]
   );
 
-  /* Смена работы — сбрасываем кадр серии */
+  const resetZoom = useCallback(() => {
+    setZoomed(false);
+    setZoomScale(1);
+    setPan({ x: 0, y: 0 });
+
+    pointersRef.current.clear();
+    pinchRef.current = null;
+    dragRef.current = null;
+    didDragRef.current = false;
+  }, []);
+
+  /* Смена работы — сбрасываем кадр серии и zoom */
   useEffect(() => {
     setFrame(0);
-  }, [work.slug]);
+    resetZoom();
+  }, [work.slug, resetZoom]);
+
+  /* Смена кадра — сбрасываем масштаб и позицию,
+     но НЕ закрываем режим zoom: так работает листание внутри него */
+  useEffect(() => {
+    setZoomScale(1);
+    setPan({ x: 0, y: 0 });
+
+    pointersRef.current.clear();
+    pinchRef.current = null;
+    dragRef.current = null;
+    didDragRef.current = false;
+  }, [frame]);
 
   /* Стоп скролла страницы, пока открыт просмотрщик */
   useEffect(() => {
@@ -116,22 +159,6 @@ export default function Lightbox({
 
     setFrame(nextIndex);
   }, []);
-
-  const resetZoom = useCallback(() => {
-    setZoomed(false);
-    setZoomScale(1);
-    setPan({ x: 0, y: 0 });
-
-    pointersRef.current.clear();
-    pinchStartDistanceRef.current = null;
-    dragRef.current = null;
-    didDragRef.current = false;
-  }, []);
-
-  /* Смена кадра — zoom всегда сбрасывается */
-  useEffect(() => {
-    resetZoom();
-  }, [frame, resetZoom]);
 
   const nextFrame = useCallback(() => {
     if (isPhoto && frame < frames.length - 1) {
@@ -251,7 +278,7 @@ export default function Lightbox({
           className="relative flex h-[100dvh] min-h-0 w-full max-w-none flex-col overflow-hidden overscroll-contain outline-none"
         >
           {/* Шапка */}
-          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-4 sm:px-8">
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 sm:px-8 sm:py-4">
             <div className="flex items-baseline gap-4">
               <span className="label text-accent">{pad(index + 1)}</span>
               <span className="label text-muted">
@@ -271,7 +298,7 @@ export default function Lightbox({
           </div>
 
           {/* Медиа */}
-          <div className="relative min-h-0 flex-1 overflow-hidden py-4 sm:py-6">
+          <div className="relative min-h-0 flex-1 overflow-hidden py-2 sm:py-6">
             {work.kind === "video" && work.muxPlaybackId ? (
               <div
                 className={cn(
@@ -349,7 +376,9 @@ export default function Lightbox({
                         return;
                       }
 
-                      setZoomScale(1.6);
+                      /* Открываем zoom в масштабе 1:
+                         кадр целиком, по центру, без обрезания */
+                      setZoomScale(1);
                       setPan({ x: 0, y: 0 });
                       setZoomed(true);
                     }}
@@ -373,22 +402,22 @@ export default function Lightbox({
             )}
           </div>
 
-          {/* Подвал: подписи, счётчик кадров, навигация */}
-          <div className="shrink-0 border-t border-border px-4 py-5 sm:px-8">
-            <div className="flex flex-wrap items-end justify-between gap-6">
+          {/* Подвал: на телефоне компактный, чтобы фото были крупнее */}
+          <div className="shrink-0 border-t border-border px-4 py-3 sm:px-8 sm:py-5">
+            <div className="flex flex-wrap items-end justify-between gap-3 sm:gap-6">
               <div className="min-w-0">
-                <h3 className="display text-2xl sm:text-3xl">{title}</h3>
+                <h3 className="display text-xl sm:text-3xl">{title}</h3>
 
-                <p className="label mt-3 text-muted">
+                <p className="label mt-2 text-muted sm:mt-3">
                   {client} · {role}
                 </p>
 
                 {description ? (
-                  <p className="mt-4 max-w-2xl text-sm leading-6 text-muted">
+                  <p className="mt-4 hidden max-w-2xl text-sm leading-6 text-muted sm:block">
                     {description}
                   </p>
                 ) : null}
-                <ul className="mt-4 flex flex-wrap gap-2">
+                <ul className="mt-4 hidden flex-wrap gap-2 sm:flex">
                   {work.tags.map((tag) => (
                     <li
                       key={tag}
@@ -422,12 +451,17 @@ export default function Lightbox({
           </div>
         </motion.div>
 
-        {/* Полноэкранный zoom-слой: живёт ПОВЕРХ карусели, ничем не обрезается */}
+        {/* Полноэкранный просмотр кадра: поверх карусели, ничем не обрезается.
+            Масштаб 1 — кадр целиком. Свайп/стрелки листают, не закрывая слой. */}
         {zoomed && isPhoto && frames[frame] ? (
           <div
-            className="fixed inset-0 z-[60] flex touch-none select-none items-center justify-center overflow-hidden bg-black/85 backdrop-blur-sm"
+            className="fixed inset-0 z-[60] flex touch-none select-none items-center justify-center overflow-hidden bg-black/90"
             style={{
-              cursor: dragRef.current ? "grabbing" : "grab",
+              cursor: dragRef.current
+                ? "grabbing"
+                : zoomScale > 1.05
+                  ? "grab"
+                  : "zoom-out",
             }}
             onClick={(event) => {
               event.stopPropagation();
@@ -437,15 +471,42 @@ export default function Lightbox({
                 return;
               }
 
-              resetZoom();
+              if (zoomScale > 1.05) {
+                /* Клик при увеличении — возврат к масштабу 1 */
+                setZoomScale(1);
+                setPan({ x: 0, y: 0 });
+              } else {
+                resetZoom();
+              }
             }}
             onWheel={(event) => {
               event.stopPropagation();
 
-              setZoomScale((current) => {
-                const change = event.deltaY < 0 ? 0.25 : -0.25;
-                return Math.min(4, Math.max(1, current + change));
-              });
+              const horizontal =
+                Math.abs(event.deltaX) > Math.abs(event.deltaY) &&
+                Math.abs(event.deltaX) > 18;
+
+              /* Горизонтальный свайп по трекпаду — соседний кадр */
+              if (horizontal && zoomScale <= 1.05) {
+                const now = Date.now();
+                if (now - wheelNavRef.current < 400) return;
+                wheelNavRef.current = now;
+
+                if (event.deltaX > 0) {
+                  nextFrame();
+                } else {
+                  prevFrame();
+                }
+
+                return;
+              }
+
+              /* Вертикальное колесо — масштаб */
+              setZoomScale((current) =>
+                clampScale(
+                  current + (event.deltaY < 0 ? 0.25 : -0.25)
+                )
+              );
             }}
             onPointerDown={(event) => {
               event.currentTarget.setPointerCapture(event.pointerId);
@@ -474,12 +535,17 @@ export default function Lightbox({
                 const first = points[0];
                 const second = points[1];
 
-                pinchStartDistanceRef.current = Math.hypot(
-                  second.x - first.x,
-                  second.y - first.y
-                );
-
-                pinchStartScaleRef.current = zoomScale;
+                pinchRef.current = {
+                  dist: Math.hypot(
+                    second.x - first.x,
+                    second.y - first.y
+                  ),
+                  scale: zoomScale,
+                  midX: (first.x + second.x) / 2,
+                  midY: (first.y + second.y) / 2,
+                  panX: pan.x,
+                  panY: pan.y,
+                };
               }
             }}
             onPointerMove={(event) => {
@@ -490,31 +556,54 @@ export default function Lightbox({
                 y: event.clientY,
               });
 
+              /* Пинч: масштаб и позиция считаются от начала жеста
+                 и привязаны к точке между пальцами — без дёрганья */
               if (
                 pointersRef.current.size === 2 &&
-                pinchStartDistanceRef.current !== null
+                pinchRef.current !== null
               ) {
                 const points = Array.from(pointersRef.current.values());
                 const first = points[0];
                 const second = points[1];
 
-                const distance = Math.hypot(
+                const dist = Math.hypot(
                   second.x - first.x,
                   second.y - first.y
                 );
 
-                const ratio = distance / pinchStartDistanceRef.current;
+                const midX = (first.x + second.x) / 2;
+                const midY = (first.y + second.y) / 2;
 
-                setZoomScale(
-                  Math.min(
-                    4,
-                    Math.max(1, pinchStartScaleRef.current * ratio)
-                  )
+                const start = pinchRef.current;
+                const nextScale = clampScale(
+                  start.scale * (dist / start.dist)
                 );
+
+                const rect =
+                  event.currentTarget.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+
+                const ratio = nextScale / start.scale;
+
+                didDragRef.current = true;
+
+                setZoomScale(nextScale);
+                setPan({
+                  x:
+                    midX -
+                    cx -
+                    (start.midX - cx - start.panX) * ratio,
+                  y:
+                    midY -
+                    cy -
+                    (start.midY - cy - start.panY) * ratio,
+                });
 
                 return;
               }
 
+              /* Один палец / мышь */
               if (
                 pointersRef.current.size === 1 &&
                 dragRef.current?.pointerId === event.pointerId
@@ -526,21 +615,55 @@ export default function Lightbox({
                   didDragRef.current = true;
                 }
 
-                setPan({
-                  x: dragRef.current.originX + deltaX,
-                  y: dragRef.current.originY + deltaY,
-                });
+                if (zoomScale > 1.05) {
+                  /* Увеличено — обычное перемещение кадра */
+                  setPan({
+                    x: dragRef.current.originX + deltaX,
+                    y: dragRef.current.originY + deltaY,
+                  });
+                } else {
+                  /* Масштаб 1 — горизонтальный жест это свайп
+                     к соседнему кадру, тянем только по X */
+                  setPan({
+                    x: dragRef.current.originX + deltaX,
+                    y: 0,
+                  });
+                }
               }
             }}
             onPointerUp={(event) => {
               pointersRef.current.delete(event.pointerId);
 
-              if (dragRef.current?.pointerId === event.pointerId) {
+              const wasDrag =
+                dragRef.current?.pointerId === event.pointerId;
+
+              if (wasDrag) {
                 dragRef.current = null;
               }
 
               if (pointersRef.current.size < 2) {
-                pinchStartDistanceRef.current = null;
+                pinchRef.current = null;
+              }
+
+              /* Отпустили палец при масштабе 1 — решаем: свайп или возврат */
+              if (wasDrag && zoomScale <= 1.05) {
+                if (pan.x < -70) {
+                  nextFrame();
+                } else if (pan.x > 70) {
+                  prevFrame();
+                } else {
+                  setPan({ x: 0, y: 0 });
+                }
+                return;
+              }
+
+              /* После пинча почти к единице — мягкий снап в центр */
+              if (
+                pointersRef.current.size === 0 &&
+                zoomScale < 1.15
+              ) {
+                setZoomScale(1);
+                setPan({ x: 0, y: 0 });
               }
             }}
             onPointerCancel={(event) => {
@@ -550,7 +673,7 @@ export default function Lightbox({
                 dragRef.current = null;
               }
 
-              pinchStartDistanceRef.current = null;
+              pinchRef.current = null;
             }}
           >
             <Image
@@ -565,11 +688,46 @@ export default function Lightbox({
               style={{
                 transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoomScale})`,
                 transformOrigin: "center center",
-                transition: dragRef.current
-                  ? "none"
-                  : "transform 220ms ease-out",
+                transition:
+                  dragRef.current || pinchRef.current
+                    ? "none"
+                    : "transform 220ms ease-out",
               }}
             />
+
+            {/* Стрелки навигации — листают, не закрывая просмотр */}
+            {frame > 0 ? (
+              <button
+                type="button"
+                aria-label="Предыдущий кадр"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  prevFrame();
+                }}
+                className="absolute left-3 top-1/2 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-xl text-white/80 transition-colors hover:bg-black/70 hover:text-white sm:flex"
+              >
+                ←
+              </button>
+            ) : null}
+
+            {frame < frames.length - 1 ? (
+              <button
+                type="button"
+                aria-label="Следующий кадр"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  nextFrame();
+                }}
+                className="absolute right-3 top-1/2 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-xl text-white/80 transition-colors hover:bg-black/70 hover:text-white sm:flex"
+              >
+                →
+              </button>
+            ) : null}
+
+            {/* Счётчик кадров */}
+            <div className="label pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70">
+              {frame + 1} / {frames.length}
+            </div>
 
             <button
               type="button"
@@ -577,7 +735,7 @@ export default function Lightbox({
                 event.stopPropagation();
                 resetZoom();
               }}
-              className="label absolute right-4 top-4 flex items-center gap-2 text-muted transition-colors hover:text-accent"
+              className="label absolute right-4 top-4 flex items-center gap-2 text-white/70 transition-colors hover:text-accent"
             >
               Закрыть
               <span aria-hidden className="text-base">
