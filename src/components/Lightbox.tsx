@@ -33,7 +33,9 @@ const clampScale = (value: number) =>
  * Zoom — отдельный полноэкранный слой:
  *   открытие в масштабе 1 (кадр целиком, по центру);
  *   колесо / пинч — масштаб, drag — перемещение;
- *   свайп или стрелки — соседний кадр без выхода из zoom.
+ *   свайп или стрелки — соседний кадр без выхода из zoom;
+ *   навигация в zoom ограничена рамками текущей серии —
+ *   лишний свайп НЕ открывает соседний проект.
  */
 export default function Lightbox({
   work,
@@ -90,6 +92,10 @@ export default function Lightbox({
   /* Защита от слишком частой навигации свайпом по трекпаду */
   const wheelNavRef = useRef(0);
 
+  /* Сразу после смены кадра transition отключён:
+     новая фотография появляется строго по центру, без «доезда» */
+  const justSwitchedRef = useRef(false);
+
   const isPhoto = work.kind === "photo";
 
   const frames = useMemo(
@@ -113,18 +119,6 @@ export default function Lightbox({
     setFrame(0);
     resetZoom();
   }, [work.slug, resetZoom]);
-
-  /* Смена кадра — сбрасываем масштаб и позицию,
-     но НЕ закрываем режим zoom: так работает листание внутри него */
-  useEffect(() => {
-    setZoomScale(1);
-    setPan({ x: 0, y: 0 });
-
-    pointersRef.current.clear();
-    pinchRef.current = null;
-    dragRef.current = null;
-    didDragRef.current = false;
-  }, [frame]);
 
   /* Стоп скролла страницы, пока открыт просмотрщик */
   useEffect(() => {
@@ -160,6 +154,40 @@ export default function Lightbox({
     setFrame(nextIndex);
   }, []);
 
+  /* Навигация ВНУТРИ zoom: строго в рамках серии.
+     Масштаб и позиция сбрасываются синхронно, до смены кадра, —
+     новая фотография рендерится сразу по центру, без рывка */
+  const zoomStep = useCallback(
+    (direction: 1 | -1) => {
+      const target = frame + direction;
+
+      if (target < 0 || target > frames.length - 1) {
+        /* Край серии — просто возвращаем кадр в центр */
+        setPan({ x: 0, y: 0 });
+        return;
+      }
+
+      justSwitchedRef.current = true;
+      setZoomScale(1);
+      setPan({ x: 0, y: 0 });
+      scrollToFrame(target);
+    },
+    [frame, frames.length, scrollToFrame]
+  );
+
+  /* После кадра-переключения возвращаем плавность обратно */
+  useEffect(() => {
+    if (!justSwitchedRef.current) return;
+
+    const id = requestAnimationFrame(() => {
+      justSwitchedRef.current = false;
+    });
+
+    return () => cancelAnimationFrame(id);
+  }, [frame]);
+
+  /* Навигация в карусели (zoom закрыт): на краях серии
+     переходим к соседней работе — как и раньше */
   const nextFrame = useCallback(() => {
     if (isPhoto && frame < frames.length - 1) {
       scrollToFrame(frame + 1);
@@ -192,12 +220,24 @@ export default function Lightbox({
       }
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        nextFrame();
+
+        if (zoomed) {
+          zoomStep(1);
+        } else {
+          nextFrame();
+        }
+
         return;
       }
       if (e.key === "ArrowLeft") {
         e.preventDefault();
-        prevFrame();
+
+        if (zoomed) {
+          zoomStep(-1);
+        } else {
+          prevFrame();
+        }
+
         return;
       }
       if (e.key !== "Tab") return;
@@ -219,7 +259,7 @@ export default function Lightbox({
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose, nextFrame, prevFrame, zoomed, resetZoom]);
+  }, [onClose, nextFrame, prevFrame, zoomed, resetZoom, zoomStep]);
 
   /* Фокус на панель при открытии, возврат — на плитку после закрытия */
   useEffect(() => {
@@ -452,7 +492,7 @@ export default function Lightbox({
         </motion.div>
 
         {/* Полноэкранный просмотр кадра: поверх карусели, ничем не обрезается.
-            Масштаб 1 — кадр целиком. Свайп/стрелки листают, не закрывая слой. */}
+            Масштаб 1 — кадр целиком. Свайп/стрелки листают в рамках серии. */}
         {zoomed && isPhoto && frames[frame] ? (
           <div
             className="fixed inset-0 z-[60] flex touch-none select-none items-center justify-center overflow-hidden bg-black/90"
@@ -486,18 +526,14 @@ export default function Lightbox({
                 Math.abs(event.deltaX) > Math.abs(event.deltaY) &&
                 Math.abs(event.deltaX) > 18;
 
-              /* Горизонтальный свайп по трекпаду — соседний кадр */
+              /* Горизонтальный свайп по трекпаду — соседний кадр серии.
+                 На краях серии ничего не происходит */
               if (horizontal && zoomScale <= 1.05) {
                 const now = Date.now();
                 if (now - wheelNavRef.current < 400) return;
                 wheelNavRef.current = now;
 
-                if (event.deltaX > 0) {
-                  nextFrame();
-                } else {
-                  prevFrame();
-                }
-
+                zoomStep(event.deltaX > 0 ? 1 : -1);
                 return;
               }
 
@@ -645,12 +681,13 @@ export default function Lightbox({
                 pinchRef.current = null;
               }
 
-              /* Отпустили палец при масштабе 1 — решаем: свайп или возврат */
+              /* Отпустили палец при масштабе 1 — решаем: свайп или возврат.
+                 zoomStep сам не выйдет за пределы серии */
               if (wasDrag && zoomScale <= 1.05) {
                 if (pan.x < -70) {
-                  nextFrame();
+                  zoomStep(1);
                 } else if (pan.x > 70) {
-                  prevFrame();
+                  zoomStep(-1);
                 } else {
                   setPan({ x: 0, y: 0 });
                 }
@@ -677,6 +714,7 @@ export default function Lightbox({
             }}
           >
             <Image
+              key={frames[frame].src}
               src={frames[frame].src}
               alt={frames[frame].alt}
               width={0}
@@ -689,20 +727,22 @@ export default function Lightbox({
                 transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoomScale})`,
                 transformOrigin: "center center",
                 transition:
-                  dragRef.current || pinchRef.current
+                  dragRef.current ||
+                  pinchRef.current ||
+                  justSwitchedRef.current
                     ? "none"
                     : "transform 220ms ease-out",
               }}
             />
 
-            {/* Стрелки навигации — листают, не закрывая просмотр */}
+            {/* Стрелки навигации — листают в рамках серии */}
             {frame > 0 ? (
               <button
                 type="button"
                 aria-label="Предыдущий кадр"
                 onClick={(event) => {
                   event.stopPropagation();
-                  prevFrame();
+                  zoomStep(-1);
                 }}
                 className="absolute left-3 top-1/2 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-xl text-white/80 transition-colors hover:bg-black/70 hover:text-white sm:flex"
               >
@@ -716,7 +756,7 @@ export default function Lightbox({
                 aria-label="Следующий кадр"
                 onClick={(event) => {
                   event.stopPropagation();
-                  nextFrame();
+                  zoomStep(1);
                 }}
                 className="absolute right-3 top-1/2 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-xl text-white/80 transition-colors hover:bg-black/70 hover:text-white sm:flex"
               >
