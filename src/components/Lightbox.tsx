@@ -34,8 +34,8 @@ const clampScale = (value: number) =>
  *   открытие в масштабе 1 (кадр целиком, по центру);
  *   колесо / пинч — масштаб, drag — перемещение;
  *   свайп или стрелки — соседний кадр без выхода из zoom;
- *   навигация в zoom ограничена рамками текущей серии —
- *   лишний свайп НЕ открывает соседний проект.
+ *   навигация в zoom ограничена рамками текущей серии.
+ *   На телефоне подвал можно скроллить, чтобы прочитать описание.
  */
 export default function Lightbox({
   work,
@@ -78,8 +78,6 @@ export default function Lightbox({
     new Map<number, { x: number; y: number }>()
   );
 
-  /* Все стартовые значения пинча: масштаб и позиция считаются
-     от начала жеста, а не накапливаются, — поэтому нет дёрганья */
   const pinchRef = useRef<{
     dist: number;
     scale: number;
@@ -89,11 +87,9 @@ export default function Lightbox({
     panY: number;
   } | null>(null);
 
-  /* Защита от слишком частой навигации свайпом по трекпаду */
   const wheelNavRef = useRef(0);
 
-  /* Сразу после смены кадра transition отключён:
-     новая фотография появляется строго по центру, без «доезда» */
+  /* Флаг: только что переключили кадр, transition пока выключен */
   const justSwitchedRef = useRef(false);
 
   const isPhoto = work.kind === "photo";
@@ -138,7 +134,7 @@ export default function Lightbox({
     const container = framesRef.current;
     const item = container?.children[
       nextIndex + 1
-    ] as HTMLElement | undefined; /* +1 из-за спейсера в начале ленты */
+    ] as HTMLElement | undefined;
 
     if (container && item) {
       const left =
@@ -155,14 +151,13 @@ export default function Lightbox({
   }, []);
 
   /* Навигация ВНУТРИ zoom: строго в рамках серии.
-     Масштаб и позиция сбрасываются синхронно, до смены кадра, —
-     новая фотография рендерится сразу по центру, без рывка */
+     Сброс масштаба и позиции + отключение transition на 1 кадр —
+     новое фото встаёт по центру мгновенно, без рывка и глитча */
   const zoomStep = useCallback(
     (direction: 1 | -1) => {
       const target = frame + direction;
 
       if (target < 0 || target > frames.length - 1) {
-        /* Край серии — просто возвращаем кадр в центр */
         setPan({ x: 0, y: 0 });
         return;
       }
@@ -171,23 +166,19 @@ export default function Lightbox({
       setZoomScale(1);
       setPan({ x: 0, y: 0 });
       scrollToFrame(target);
+
+      /* Возвращаем transition через 2 RAF:
+         1-й кадр — React обновил src,
+         2-й — браузер применил новое изображение */
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          justSwitchedRef.current = false;
+        });
+      });
     },
     [frame, frames.length, scrollToFrame]
   );
 
-  /* После кадра-переключения возвращаем плавность обратно */
-  useEffect(() => {
-    if (!justSwitchedRef.current) return;
-
-    const id = requestAnimationFrame(() => {
-      justSwitchedRef.current = false;
-    });
-
-    return () => cancelAnimationFrame(id);
-  }, [frame]);
-
-  /* Навигация в карусели (zoom закрыт): на краях серии
-     переходим к соседней работе — как и раньше */
   const nextFrame = useCallback(() => {
     if (isPhoto && frame < frames.length - 1) {
       scrollToFrame(frame + 1);
@@ -204,7 +195,6 @@ export default function Lightbox({
     }
   }, [isPhoto, frame, onPrev, scrollToFrame]);
 
-  /* Клавиатура + запирание фокуса внутри диалога */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -261,14 +251,12 @@ export default function Lightbox({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose, nextFrame, prevFrame, zoomed, resetZoom, zoomStep]);
 
-  /* Фокус на панель при открытии, возврат — на плитку после закрытия */
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
     return () => previouslyFocused?.focus?.();
   }, []);
 
-  /* Предзагрузка соседних кадров серии — листание без задержки */
   useEffect(() => {
     if (!isPhoto || frames.length < 2) return;
 
@@ -315,7 +303,7 @@ export default function Lightbox({
           ref={panelRef}
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
-          className="relative flex h-[100dvh] min-h-0 w-full max-w-none flex-col overflow-hidden overscroll-contain outline-none"
+          className="relative flex h-[100dvh] min-h-0 w-full max-w-none flex-col overflow-y-auto overscroll-contain outline-none"
         >
           {/* Шапка */}
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 sm:px-8 sm:py-4">
@@ -366,7 +354,6 @@ export default function Lightbox({
                 ref={framesRef}
                 onScroll={(event) => {
                   const container = event.currentTarget;
-                  /* Первый и последний элементы — спейсеры, пропускаем их */
                   const items = (
                     Array.from(container.children) as HTMLElement[]
                   ).slice(1, -1);
@@ -398,7 +385,6 @@ export default function Lightbox({
                   touchAction: "pan-x",
                 }}
               >
-                {/* Спейсер: даёт первому кадру встать по центру */}
                 <div aria-hidden className="h-px w-[38vw] shrink-0" />
 
                 {frames.map((image, imageIndex) => (
@@ -416,8 +402,6 @@ export default function Lightbox({
                         return;
                       }
 
-                      /* Открываем zoom в масштабе 1:
-                         кадр целиком, по центру, без обрезания */
                       setZoomScale(1);
                       setPan({ x: 0, y: 0 });
                       setZoomed(true);
@@ -436,13 +420,12 @@ export default function Lightbox({
                   </div>
                 ))}
 
-                {/* Спейсер: даёт последнему кадру встать по центру */}
                 <div aria-hidden className="h-px w-[38vw] shrink-0" />
               </div>
             )}
           </div>
 
-          {/* Подвал: на телефоне компактный, чтобы фото были крупнее */}
+          {/* Подвал */}
           <div className="shrink-0 border-t border-border px-4 py-3 sm:px-8 sm:py-5">
             <div className="flex flex-wrap items-end justify-between gap-3 sm:gap-6">
               <div className="min-w-0">
@@ -453,11 +436,11 @@ export default function Lightbox({
                 </p>
 
                 {description ? (
-                  <p className="mt-4 hidden max-w-2xl text-sm leading-6 text-muted sm:block">
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-muted sm:mt-4">
                     {description}
                   </p>
                 ) : null}
-                <ul className="mt-4 hidden flex-wrap gap-2 sm:flex">
+                <ul className="mt-3 flex flex-wrap gap-2 sm:mt-4">
                   {work.tags.map((tag) => (
                     <li
                       key={tag}
@@ -491,8 +474,8 @@ export default function Lightbox({
           </div>
         </motion.div>
 
-        {/* Полноэкранный просмотр кадра: поверх карусели, ничем не обрезается.
-            Масштаб 1 — кадр целиком. Свайп/стрелки листают в рамках серии. */}
+        {/* Полноэкранный просмотр кадра: поверх карусели.
+            Без key у Image — React переиспользует элемент, глитча нет. */}
         {zoomed && isPhoto && frames[frame] ? (
           <div
             className="fixed inset-0 z-[60] flex touch-none select-none items-center justify-center overflow-hidden bg-black/90"
@@ -512,7 +495,6 @@ export default function Lightbox({
               }
 
               if (zoomScale > 1.05) {
-                /* Клик при увеличении — возврат к масштабу 1 */
                 setZoomScale(1);
                 setPan({ x: 0, y: 0 });
               } else {
@@ -526,8 +508,6 @@ export default function Lightbox({
                 Math.abs(event.deltaX) > Math.abs(event.deltaY) &&
                 Math.abs(event.deltaX) > 18;
 
-              /* Горизонтальный свайп по трекпаду — соседний кадр серии.
-                 На краях серии ничего не происходит */
               if (horizontal && zoomScale <= 1.05) {
                 const now = Date.now();
                 if (now - wheelNavRef.current < 400) return;
@@ -537,7 +517,6 @@ export default function Lightbox({
                 return;
               }
 
-              /* Вертикальное колесо — масштаб */
               setZoomScale((current) =>
                 clampScale(
                   current + (event.deltaY < 0 ? 0.25 : -0.25)
@@ -592,8 +571,6 @@ export default function Lightbox({
                 y: event.clientY,
               });
 
-              /* Пинч: масштаб и позиция считаются от начала жеста
-                 и привязаны к точке между пальцами — без дёрганья */
               if (
                 pointersRef.current.size === 2 &&
                 pinchRef.current !== null
@@ -639,7 +616,6 @@ export default function Lightbox({
                 return;
               }
 
-              /* Один палец / мышь */
               if (
                 pointersRef.current.size === 1 &&
                 dragRef.current?.pointerId === event.pointerId
@@ -652,14 +628,11 @@ export default function Lightbox({
                 }
 
                 if (zoomScale > 1.05) {
-                  /* Увеличено — обычное перемещение кадра */
                   setPan({
                     x: dragRef.current.originX + deltaX,
                     y: dragRef.current.originY + deltaY,
                   });
                 } else {
-                  /* Масштаб 1 — горизонтальный жест это свайп
-                     к соседнему кадру, тянем только по X */
                   setPan({
                     x: dragRef.current.originX + deltaX,
                     y: 0,
@@ -681,8 +654,6 @@ export default function Lightbox({
                 pinchRef.current = null;
               }
 
-              /* Отпустили палец при масштабе 1 — решаем: свайп или возврат.
-                 zoomStep сам не выйдет за пределы серии */
               if (wasDrag && zoomScale <= 1.05) {
                 if (pan.x < -70) {
                   zoomStep(1);
@@ -694,7 +665,6 @@ export default function Lightbox({
                 return;
               }
 
-              /* После пинча почти к единице — мягкий снап в центр */
               if (
                 pointersRef.current.size === 0 &&
                 zoomScale < 1.15
@@ -714,7 +684,6 @@ export default function Lightbox({
             }}
           >
             <Image
-              key={frames[frame].src}
               src={frames[frame].src}
               alt={frames[frame].alt}
               width={0}
@@ -735,7 +704,6 @@ export default function Lightbox({
               }}
             />
 
-            {/* Стрелки навигации — листают в рамках серии */}
             {frame > 0 ? (
               <button
                 type="button"
@@ -764,7 +732,6 @@ export default function Lightbox({
               </button>
             ) : null}
 
-            {/* Счётчик кадров */}
             <div className="label pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70">
               {frame + 1} / {frames.length}
             </div>
