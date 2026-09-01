@@ -7,6 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { Work } from "@/lib/types";
 import { aspectClass, cn, pad } from "@/lib/utils";
 import type { Locale } from "@/data/i18n";
+
 const MuxPlayer = dynamic(() => import("@mux/mux-player-react"), {
   ssr: false,
 });
@@ -35,7 +36,6 @@ const clampScale = (value: number) =>
  *   колесо / пинч — масштаб, drag — перемещение;
  *   свайп или стрелки — соседний кадр без выхода из zoom;
  *   навигация в zoom ограничена рамками текущей серии.
- *   На телефоне подвал можно скроллить, чтобы прочитать описание.
  */
 export default function Lightbox({
   work,
@@ -65,6 +65,10 @@ export default function Lightbox({
   const [zoomScale, setZoomScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
+  /* Отдельный индекс для zoom-слоя: обновляется синхронно,
+     чтобы новый src применялся ровно когда transition выключен */
+  const [zoomedFrame, setZoomedFrame] = useState(0);
+
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -88,8 +92,6 @@ export default function Lightbox({
   } | null>(null);
 
   const wheelNavRef = useRef(0);
-
-  /* Флаг: только что переключили кадр, transition пока выключен */
   const justSwitchedRef = useRef(false);
 
   const isPhoto = work.kind === "photo";
@@ -113,6 +115,7 @@ export default function Lightbox({
   /* Смена работы — сбрасываем кадр серии и zoom */
   useEffect(() => {
     setFrame(0);
+    setZoomedFrame(0);
     resetZoom();
   }, [work.slug, resetZoom]);
 
@@ -151,7 +154,7 @@ export default function Lightbox({
   }, []);
 
   /* Навигация ВНУТРИ zoom: строго в рамках серии.
-     Сброс масштаба и позиции + отключение transition на 1 кадр —
+     Сброс масштаба, позиции и синхронная смена кадра в zoom-слое —
      новое фото встаёт по центру мгновенно, без рывка и глитча */
   const zoomStep = useCallback(
     (direction: 1 | -1) => {
@@ -165,11 +168,9 @@ export default function Lightbox({
       justSwitchedRef.current = true;
       setZoomScale(1);
       setPan({ x: 0, y: 0 });
+      setZoomedFrame(target);
       scrollToFrame(target);
 
-      /* Возвращаем transition через 2 RAF:
-         1-й кадр — React обновил src,
-         2-й — браузер применил новое изображение */
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           justSwitchedRef.current = false;
@@ -404,6 +405,7 @@ export default function Lightbox({
 
                       setZoomScale(1);
                       setPan({ x: 0, y: 0 });
+                      setZoomedFrame(frame);
                       setZoomed(true);
                     }}
                   >
@@ -475,8 +477,8 @@ export default function Lightbox({
         </motion.div>
 
         {/* Полноэкранный просмотр кадра: поверх карусели.
-            Без key у Image — React переиспользует элемент, глитча нет. */}
-        {zoomed && isPhoto && frames[frame] ? (
+            Рендерим zoomedFrame, чтобы src обновлялся синхронно с transition. */}
+        {zoomed && isPhoto && frames[zoomedFrame] ? (
           <div
             className="fixed inset-0 z-[60] flex touch-none select-none items-center justify-center overflow-hidden bg-black/90"
             style={{
@@ -684,8 +686,8 @@ export default function Lightbox({
             }}
           >
             <Image
-              src={frames[frame].src}
-              alt={frames[frame].alt}
+              src={frames[zoomedFrame].src}
+              alt={frames[zoomedFrame].alt}
               width={0}
               height={0}
               sizes="100vw"
@@ -704,7 +706,7 @@ export default function Lightbox({
               }}
             />
 
-            {frame > 0 ? (
+            {zoomedFrame > 0 ? (
               <button
                 type="button"
                 aria-label="Предыдущий кадр"
@@ -718,7 +720,7 @@ export default function Lightbox({
               </button>
             ) : null}
 
-            {frame < frames.length - 1 ? (
+            {zoomedFrame < frames.length - 1 ? (
               <button
                 type="button"
                 aria-label="Следующий кадр"
@@ -733,7 +735,7 @@ export default function Lightbox({
             ) : null}
 
             <div className="label pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70">
-              {frame + 1} / {frames.length}
+              {zoomedFrame + 1} / {frames.length}
             </div>
 
             <button
