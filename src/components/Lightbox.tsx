@@ -526,6 +526,15 @@ export default function Lightbox({
               );
             }}
             onPointerDown={(event) => {
+              /* Нажатие началось на кнопке (стрелки, закрыть) —
+                 не захватываем указатель, иначе click не дойдёт
+                 до кнопки и сработает клик по фону (resetZoom) */
+              if (
+                (event.target as HTMLElement).closest("button")
+              ) {
+                return;
+              }
+
               event.currentTarget.setPointerCapture(event.pointerId);
 
               pointersRef.current.set(event.pointerId, {
