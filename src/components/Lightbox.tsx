@@ -154,8 +154,8 @@ export default function Lightbox({
   }, []);
 
   /* Навигация ВНУТРИ zoom: строго в рамках серии.
-     Масштаб сохраняется, сбрасывается только позиция —
-     новое фото встаёт по центру с тем же zoom */
+     Сброс масштаба, позиции и синхронная смена кадра в zoom-слое —
+     новое фото встаёт по центру мгновенно, без рывка и глитча */
   const zoomStep = useCallback(
     (direction: 1 | -1) => {
       const target = frame + direction;
@@ -166,6 +166,7 @@ export default function Lightbox({
       }
 
       justSwitchedRef.current = true;
+      setZoomScale(1);
       setPan({ x: 0, y: 0 });
       setZoomedFrame(target);
       scrollToFrame(target);
