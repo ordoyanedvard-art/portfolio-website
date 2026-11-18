@@ -156,3 +156,12 @@ def test_stable_face_ignores_moving_faces():
 def test_find_facecam_no_face(sample_video):
     from clipper.facecam import find_facecam
     assert find_facecam(sample_video, 0, 6, 1080 / 806) is None
+
+
+def test_wav_loader_bypasses_pyav(sample_video, tmp_path):
+    from clipper.editor import Transcriber, extract_wav
+    wav = tmp_path / "a.wav"
+    extract_wav(sample_video, 1, 3, wav)
+    audio = Transcriber._load_wav(wav)
+    assert audio.dtype.name == "float32" and 2.9 * 16000 <= len(audio) <= 3.1 * 16000
+    assert 0 < abs(audio).max() <= 1.0

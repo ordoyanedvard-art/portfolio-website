@@ -45,9 +45,23 @@ class Transcriber:
         log.info("расшифровка: %d слов", len(words))
         return words, " ".join(w.text for w in words)
 
+    @staticmethod
+    def _load_wav(wav: Path):
+        """16 кГц моно WAV (его готовит extract_wav) -> numpy float32.
+        Читаем сами, а не через faster-whisper: его чтение звука идёт через PyAV,
+        а свежие версии PyAV несовместимы с ним (TypeError: metadata_errors)."""
+        import wave
+
+        import numpy as np
+        with wave.open(str(wav), "rb") as f:
+            if f.getsampwidth() != 2 or f.getnchannels() != 1 or f.getframerate() != 16000:
+                raise ValueError("ожидается WAV 16 кГц моно 16 бит")
+            raw = f.readframes(f.getnframes())
+        return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+
     def _run(self, wav: Path, vad: bool) -> list[Word]:
         segments, _info = self._load().transcribe(
-            str(wav), word_timestamps=True, vad_filter=vad, language=self.cfg["language"],
+            self._load_wav(wav), word_timestamps=True, vad_filter=vad, language=self.cfg["language"],
             condition_on_previous_text=False)
         words: list[Word] = []
         for seg in segments:
@@ -169,7 +183,7 @@ def video_filter(r: dict, facecam: list[float] | None, layout: str, has_subs: bo
 
 def extract_wav(src: Path, offset: float, dur: float, wav: Path) -> None:
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-i", str(src), "-ss", f"{offset:.2f}", "-t", f"{dur:.2f}", "-vn", "-ac", "1", "-ar", "16000", str(wav)],
+                    "-i", str(src), "-ss", f"{offset:.2f}", "-t", f"{dur:.2f}", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(wav)],
                    check=True)
 
 
