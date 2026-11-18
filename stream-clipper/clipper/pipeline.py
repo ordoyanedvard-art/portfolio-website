@@ -16,6 +16,7 @@ from .chat import TwitchChat
 from .config import streamlink_bin
 from .detector import ChatSpikeDetector, Moment
 from .editor import Transcriber, extract_wav, render
+from .facecam import find_facecam
 from .recorder import StreamRecorder
 from .titles import make_meta
 from .twitch_api import TwitchAPI
@@ -34,6 +35,32 @@ class ClipProcessor:
         self.cfg = cfg
         self.transcriber = Transcriber(cfg["transcribe"]) if cfg["transcribe"]["enabled"] else None
         self.out_root = Path(cfg["output"]["dir"])
+        self.face_cache_file = self.out_root / "facecams_auto.json"
+        try:
+            self.face_cache: dict = json.loads(self.face_cache_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            self.face_cache = {}
+
+    def facecam_for(self, src: Path, offset: float, dur: float, channel: str) -> list[float] | None:
+        r = self.cfg["render"]
+        if r["layout"] != "split":
+            return None
+        if channel in r["facecams"]:          # вручную в config.yaml — главнее всего
+            return r["facecams"][channel]
+        if not r["auto_facecam"]:
+            return None
+        from .editor import split_top
+        found = find_facecam(src, offset, dur, r["width"] / split_top(r), r["face_zoom"])
+        if found:
+            self.face_cache[channel] = found
+            self.out_root.mkdir(parents=True, exist_ok=True)
+            self.face_cache_file.write_text(json.dumps(self.face_cache, indent=1), encoding="utf-8")
+            log.info("[%s] лицо найдено: %s", channel, found)
+            return found
+        cached = self.face_cache.get(channel)
+        log.info("[%s] лицо в клипе не найдено — %s", channel,
+                 "беру прошлое положение" if cached else "делаю без крупного плана")
+        return cached
 
     def process(self, src: Path, offset: float, dur: float, channel: str, extra: dict) -> Path:
         stamp = datetime.now().strftime("%Y-%m-%d/%H%M%S")
@@ -46,13 +73,14 @@ class ClipProcessor:
                 extract_wav(src, offset, dur, wav)
                 words, transcript = self.transcriber.words(wav)
             except Exception as e:
-                log.warning("расшифровка не удалась: %s", e)
+                log.exception("расшифровка не удалась: %s", e)
             finally:
                 wav.unlink(missing_ok=True)
-        facecam = self.cfg["render"]["facecams"].get(channel)
+        facecam = self.facecam_for(src, offset, dur, channel)
         render(src, offset, dur, out_dir, self.cfg["render"], words, facecam)
         meta = make_meta(self.cfg["titles"], channel, transcript, extra.get("top_words", []))
         info = {"channel": channel, "duration": round(dur, 1), "transcript": transcript,
+                "subtitle_words": len(words), "facecam": facecam,
                 **meta.model_dump(), **extra}
         (out_dir / "meta.json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
         (out_dir / "caption.txt").write_text(

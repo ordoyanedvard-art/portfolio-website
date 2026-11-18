@@ -138,3 +138,21 @@ def test_example_config_loads():
     cfg = load_config(Path(__file__).parent.parent / "config.example.yaml")
     assert cfg["twitch"]["languages"] == ["ru"]
     assert cfg["twitch"]["channels"] == [] and cfg["render"]["facecams"] == {}
+
+
+def test_stable_face_ignores_moving_faces():
+    from clipper.facecam import face_crop, stable_face
+    cam = (0.05, 0.6, 0.08, 0.14)
+    frames = [[cam, (0.1 * i, 0.2, 0.05, 0.09)] for i in range(8)]  # вебка + бегающий NPC
+    face = stable_face(frames)
+    assert face is not None and abs(face[0] - 0.05) < 1e-6
+    crop = face_crop(face, 16 / 9, 1080 / 806, 2.6)
+    x, y, w, h = crop
+    assert 0 <= x and 0 <= y and x + w <= 1 and y + h <= 1
+    assert abs((w * 16 / 9) / h - 1080 / 806) < 0.01        # пропорции панели
+    assert stable_face([[(0.1 * i, 0.2, 0.05, 0.09)] for i in range(8)]) is None
+
+
+def test_find_facecam_no_face(sample_video):
+    from clipper.facecam import find_facecam
+    assert find_facecam(sample_video, 0, 6, 1080 / 806) is None

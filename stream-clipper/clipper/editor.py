@@ -38,15 +38,26 @@ class Transcriber:
         return self._model
 
     def words(self, wav: Path) -> tuple[list[Word], str]:
+        words = self._run(wav, vad=True)
+        if not words:
+            # фильтр тишины мог принять речь под громкий звук игры за шум — пробуем без него
+            words = self._run(wav, vad=False)
+        log.info("расшифровка: %d слов", len(words))
+        return words, " ".join(w.text for w in words)
+
+    def _run(self, wav: Path, vad: bool) -> list[Word]:
         segments, _info = self._load().transcribe(
-            str(wav), word_timestamps=True, vad_filter=True, language=self.cfg["language"])
+            str(wav), word_timestamps=True, vad_filter=vad, language=self.cfg["language"],
+            condition_on_previous_text=False)
         words: list[Word] = []
         for seg in segments:
+            if seg.no_speech_prob > 0.8 and seg.avg_logprob < -1.0:
+                continue  # шум/музыка, а не речь
             for w in seg.words or []:
                 t = w.word.strip()
                 if t:
                     words.append(Word(w.start, w.end, t))
-        return words, " ".join(w.text for w in words)
+        return words
 
 
 # --- субтитры (ASS) ------------------------------------------------------------
@@ -111,11 +122,16 @@ def _even(x: float) -> int:
     return int(x) // 2 * 2
 
 
+def split_top(r: dict) -> int:
+    """Высота верхней панели (крупный план стримера) в раскладке split."""
+    return _even(r["height"] * r.get("split_top_ratio", 0.42))
+
+
 def video_filter(r: dict, facecam: list[float] | None, layout: str, has_subs: bool) -> str:
     W, H = r["width"], r["height"]
     if layout == "split" and facecam:
         fx, fy, fw, fh = facecam
-        top_h = _even(H * 0.36)
+        top_h = split_top(r)
         bot_h = H - top_h
         g = (f"[0:v]split=2[a][b];"
              f"[a]crop=iw*{fw}:ih*{fh}:iw*{fx}:ih*{fy},scale={W}:{top_h}:force_original_aspect_ratio=increase,"
@@ -154,7 +170,7 @@ def render(src: Path, offset: float, dur: float, out_dir: Path, r: dict,
     has_subs = bool(words)
     if has_subs:
         # в split субтитры стоят на стыке вебки и геймплея, иначе — снизу
-        pos = (r["width"] // 2, int(r["height"] * 0.36)) if layout == "split" else None
+        pos = (r["width"] // 2, split_top(r)) if layout == "split" else None
         (out_dir / "subs.ass").write_text(build_ass(words, r, pos), encoding="utf-8")
     out = out_dir / "clip.mp4"
     # -ss после -i: точная и надёжная перемотка (исходники короткие, это быстро)

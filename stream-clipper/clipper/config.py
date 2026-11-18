@@ -58,7 +58,10 @@ DEFAULTS: dict = {
         "width": 1080,
         "height": 1920,
         "fps": 30,
-        "layout": "blur",           # blur | split | crop
+        "layout": "split",          # split | blur | crop
+        "split_top_ratio": 0.42,    # доля высоты под крупный план стримера
+        "auto_facecam": True,       # сам находить лицо стримера в кадре
+        "face_zoom": 2.6,           # крупность: высота кадра = высота лица × это число
         "crf": 21,
         "preset": "veryfast",
         "font": "DejaVu Sans",
