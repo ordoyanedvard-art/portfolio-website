@@ -1,4 +1,4 @@
-# Обновление программы до последней версии из GitHub.
+﻿# Обновление программы до последней версии из GitHub.
 # Ключи (.env), настройки (config.yaml) и готовые клипы (data) не трогаются.
 # Запуск:  powershell -ExecutionPolicy Bypass -File .\update.ps1
 $ErrorActionPreference = "Stop"
