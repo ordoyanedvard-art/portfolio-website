@@ -5,6 +5,7 @@
   render FILE    — смонтировать клип из локального видео (проверка монтажа)
   twitch-clips   — взять самые просматриваемые клипы Twitch по игре и смонтировать
   top            — кто из русских стримеров сейчас играет в GTA 6 (для составления списка)
+  subs-test FILE — распознать речь в видео и показать слова (проверка субтитров)
   check          — проверить, что всё установлено и ключи работают
 """
 from __future__ import annotations
@@ -93,6 +94,24 @@ def _top(cfg: dict) -> None:
     print(f"\n✅ — проходит порог min_viewers={tw['min_viewers']}, ★ — уже в вашем списке channels")
 
 
+def _subs_test(cfg: dict, file: str) -> None:
+    import tempfile
+    from pathlib import Path
+
+    from .editor import Transcriber, extract_wav
+    src = Path(file)
+    if src.is_dir():
+        src = src / "clip.mp4"
+    print(f"Файл: {src}  (есть: {src.exists()})")
+    with tempfile.TemporaryDirectory() as td:
+        wav = Path(td) / "a.wav"
+        extract_wav(src, 0, 600, wav)
+        print(f"Звук извлечён: {wav.stat().st_size // 1024} КБ")
+        words, text = Transcriber(cfg["transcribe"]).words(wav)
+    print(f"Слов распознано: {len(words)}")
+    print(text[:1000] or "(пусто)")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="clipper", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -103,6 +122,8 @@ def main() -> None:
     sub.add_parser("check")
     sub.add_parser("twitch-clips")
     sub.add_parser("top")
+    st = sub.add_parser("subs-test")
+    st.add_argument("file")
     ct = sub.add_parser("chat-test")
     ct.add_argument("channel")
     ct.add_argument("--seconds", type=int, default=0)
@@ -119,7 +140,9 @@ def main() -> None:
 
     if a.cmd == "check":
         sys.exit(_check(cfg))
-    if a.cmd == "top":
+    if a.cmd == "subs-test":
+        _subs_test(cfg, a.file)
+    elif a.cmd == "top":
         _top(cfg)
     elif a.cmd == "chat-test":
         asyncio.run(_chat_test(cfg, a.channel.lower(), a.seconds))

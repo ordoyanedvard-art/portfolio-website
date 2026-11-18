@@ -127,16 +127,26 @@ def split_top(r: dict) -> int:
     return _even(r["height"] * r.get("split_top_ratio", 0.42))
 
 
+def split_gap(r: dict) -> int:
+    """Полоса под субтитры между стримером и игрой."""
+    return _even(r["height"] * r.get("split_gap_ratio", 0.12))
+
+
 def video_filter(r: dict, facecam: list[float] | None, layout: str, has_subs: bool) -> str:
     W, H = r["width"], r["height"]
     if layout == "split" and facecam:
         fx, fy, fw, fh = facecam
         top_h = split_top(r)
-        bot_h = H - top_h
-        g = (f"[0:v]split=2[a][b];"
+        game_y = top_h + split_gap(r)
+        # сверху стример крупно, ниже полоса субтитров, ниже игра целиком (16:9, без обрезки),
+        # всё остальное — размытый кадр игры
+        g = (f"[0:v]split=3[a][b][c];"
              f"[a]crop=iw*{fw}:ih*{fh}:iw*{fx}:ih*{fy},scale={W}:{top_h}:force_original_aspect_ratio=increase,"
              f"crop={W}:{top_h},setsar=1[top];"
-             f"[b]scale=-2:{bot_h},crop={W}:{bot_h},setsar=1[bot];[top][bot]vstack[v0]")
+             f"[b]scale={W // 4}:{H // 4}:force_original_aspect_ratio=increase,crop={W // 4}:{H // 4},"
+             f"boxblur=10:2,scale={W}:{H},eq=brightness=-0.15,setsar=1[bg];"
+             f"[c]scale={W}:-2,setsar=1[game];"
+             f"[bg][top]overlay=0:0[t1];[t1][game]overlay=0:{game_y}[v0]")
     elif layout == "crop":
         g = f"[0:v]scale=-2:{H},crop={W}:{H},setsar=1[v0]"
     else:  # blur
@@ -170,7 +180,7 @@ def render(src: Path, offset: float, dur: float, out_dir: Path, r: dict,
     has_subs = bool(words)
     if has_subs:
         # в split субтитры стоят на стыке вебки и геймплея, иначе — снизу
-        pos = (r["width"] // 2, split_top(r)) if layout == "split" else None
+        pos = (r["width"] // 2, split_top(r) + split_gap(r) // 2) if layout == "split" else None
         (out_dir / "subs.ass").write_text(build_ass(words, r, pos), encoding="utf-8")
     out = out_dir / "clip.mp4"
     # -ss после -i: точная и надёжная перемотка (исходники короткие, это быстро)
