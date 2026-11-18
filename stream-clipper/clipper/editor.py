@@ -215,6 +215,25 @@ def video_filter(r: dict, facecam: list[float] | None, layout: str, has_subs: bo
     return g
 
 
+def measure_loudness(src: Path, offset: float, dur: float) -> float | None:
+    """Общая громкость отрезка (LUFS) — один быстрый проход по звуку."""
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(src), "-ss", f"{offset:.2f}",
+                        "-t", f"{dur:.2f}", "-vn", "-af", "ebur128=framelog=quiet", "-f", "null", "-"],
+                       capture_output=True, text=True)
+    m = re.findall(r"I:\s+(-?[\d.]+) LUFS", r.stderr)
+    return float(m[-1]) if m else None
+
+
+def audio_filter(src: Path, offset: float, dur: float, target: float = -14.0) -> str:
+    """Ровное усиление до громкости соцсетей + ограничитель против хрипа.
+    Динамический loudnorm «на лету» приглушал всё после крика стримера."""
+    lufs = measure_loudness(src, offset, dur)
+    if lufs is None or lufs < -70:
+        return "anull"
+    gain = max(-20.0, min(20.0, target - lufs))
+    return f"volume={gain:.1f}dB,alimiter=limit=0.89:level=disabled"
+
+
 def extract_wav(src: Path, offset: float, dur: float, wav: Path) -> None:
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
                     "-i", str(src), "-ss", f"{offset:.2f}", "-t", f"{dur:.2f}", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(wav)],
@@ -236,7 +255,7 @@ def render(src: Path, offset: float, dur: float, out_dir: Path, r: dict,
            "-i", str(src.resolve()), "-ss", f"{offset:.2f}", "-t", f"{dur:.2f}",
            "-filter_complex", video_filter(r, facecam, layout, has_subs),
            "-map", "[vout]", "-map", "0:a:0?",
-           "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+           "-af", audio_filter(src, offset, dur),
            "-c:v", "libx264", "-preset", r["preset"], "-crf", str(r["crf"]),
            "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart", "clip.mp4"]
     res = subprocess.run(cmd, cwd=out_dir, capture_output=True)

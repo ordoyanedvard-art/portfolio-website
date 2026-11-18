@@ -322,3 +322,102 @@ def test_webcam_rect_stops_at_moving_gameplay():
     assert abs(x + w - 260 / 960) < 0.01 and abs(y + h - 480 / 540) < 0.015
     cx, cy, cw, ch = face_crop(face, 16 / 9, 1080 / 806, 2.6, (x, y, w, h))
     assert cx >= x - 1e-6 and cy >= y - 1e-6 and cx + cw <= x + w + 1e-6 and cy + ch <= y + h + 1e-6
+
+
+def _audio_feed(det, t0, seconds, db):
+    det.add_levels([(t0 + i * 0.5, db) for i in range(int(seconds * 2))])
+
+
+def test_audio_spike_needs_chat_confirmation():
+    from clipper.detector import AudioSpikeDetector
+    cfg = DEFAULTS["audio"]
+    t0 = 1_700_000_000.0
+    for chat_ratio, expect in ((2.0, True), (1.0, False)):
+        det = AudioSpikeDetector("streamer", cfg, t0)
+        _audio_feed(det, t0, 300, -34.0)                 # обычная болтовня
+        _audio_feed(det, t0 + 300, 2, -18.0)             # крик: +16 дБ
+        _audio_feed(det, t0 + 302, 30, -34.0)
+        assert det.tick(t0 + 305, lambda a, b: chat_ratio) is None      # ждём реакцию чата
+        m = det.tick(t0 + 320, lambda a, b: chat_ratio)
+        assert (m is not None) == expect
+        if m:
+            assert m.kind == "audio" and m.score >= 10 and abs(m.peak - (t0 + 301)) < 2
+
+
+def test_audio_quiet_or_steady_loud_is_not_a_spike():
+    from clipper.detector import AudioSpikeDetector
+    t0 = 1_700_000_000.0
+    det = AudioSpikeDetector("s", DEFAULTS["audio"], t0)
+    _audio_feed(det, t0, 300, -20.0)                     # всегда громко — это норма
+    _audio_feed(det, t0 + 300, 10, -18.0)
+    assert det.tick(t0 + 330, lambda a, b: 5.0) is None
+    det2 = AudioSpikeDetector("s", DEFAULTS["audio"], t0)
+    _audio_feed(det2, t0, 300, -60.0)                    # почти тишина: скачок до -45 — не крик
+    _audio_feed(det2, t0 + 300, 2, -45.0)
+    assert det2.tick(t0 + 330, lambda a, b: 5.0) is None
+
+
+def test_segment_levels(tmp_path):
+    from clipper.recorder import segment_levels
+    p = tmp_path / "s.ts"
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                    "sine=frequency=440:sample_rate=48000,volume='if(between(t,2,3),8,0.25)':eval=frame",
+                    "-t", "4", "-c:a", "aac", "-f", "mpegts", str(p)], check=True)
+    lv = segment_levels(p)
+    assert len(lv) == 8
+    quiet = [db for off, db in lv if off < 1.5]
+    loud = [db for off, db in lv if 2.0 <= off < 3.0]
+    assert min(loud) - max(quiet) > 15
+
+
+def test_chat_ratio_between():
+    t0 = 1_700_000_000.0
+    det = ChatSpikeDetector("s", DEFAULTS["detector"], t0)
+    simulate(det, t0, 120, 2)
+    simulate(det, t0 + 120, 10, 8)
+    assert det.ratio_between(t0 + 120, t0 + 129) > 3
+    assert det.ratio_between(t0 + 60, t0 + 69) < 1.5
+
+
+def test_viewer_clips_are_downloaded_and_queued(tmp_path, monkeypatch):
+    import asyncio
+    from datetime import datetime, timezone
+
+    import clipper.pipeline as pl
+
+    cfg = load_config(tmp_path / "none.yaml")
+    cfg["twitch"].update(auto_discover=False, client_id="")
+    cfg["recorder"]["work_dir"] = str(tmp_path / "buf")
+    cfg["output"]["dir"] = str(tmp_path / "out")
+    cfg["viewer_clips"]["poll_seconds"] = 0.05
+    app = pl.App(cfg)
+    app.started -= 600
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    class FakeAPI:
+        def channel_clips(self, uid, since):
+            return [{"id": "c1", "url": "https://clips.twitch.tv/c1", "title": "АХАХА", "duration": 25.0,
+                     "created_at": now_iso, "view_count": 12},
+                    {"id": "c2", "url": "https://clips.twitch.tv/c2", "title": "коротко", "duration": 3.0,
+                     "created_at": now_iso, "view_count": 1}]
+
+    app.api = FakeAPI()
+    app.channels["evelone2004"] = pl.Channel("evelone2004", cfg)
+    app.user_ids["evelone2004"] = "123"
+
+    def fake_run(cmd, **kw):
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"clip")
+        return subprocess.CompletedProcess(cmd, 0, b"", b"")
+
+    monkeypatch.setattr(pl.subprocess, "run", fake_run)
+
+    async def go():
+        task = asyncio.create_task(app.viewer_clips())
+        await asyncio.sleep(0.3)
+        task.cancel()
+
+    asyncio.run(go())
+    assert app.jobs.qsize() == 1                          # короткий клип отброшен, дубль не взят
+    src, off, dur, name, extra = app.jobs.get_nowait()
+    assert name == "evelone2004" and dur == 25.0 and extra["moment"]["kind"] == "viewers"
+    assert app.channels["evelone2004"].by_kind["viewers"] == 1

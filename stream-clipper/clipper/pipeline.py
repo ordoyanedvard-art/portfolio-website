@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .chat import TwitchChat
 from .config import streamlink_bin
-from .detector import ChatSpikeDetector, Moment
+from .detector import AudioSpikeDetector, ChatSpikeDetector, Moment
 from .editor import Transcriber, extract_wav, render
 from .facecam import find_facecam
 from .recorder import StreamRecorder
@@ -111,8 +111,20 @@ class Channel:
         self.name = name
         self.detector = ChatSpikeDetector(name, cfg["detector"], time.time())
         self.recorder = StreamRecorder(name, cfg["recorder"])
+        self.audio = AudioSpikeDetector(name, cfg["audio"], time.time()) if cfg["audio"]["enabled"] else None
+        if self.audio:
+            self.recorder.on_levels = self.audio.add_levels
+        self.user_id: str | None = None
         self.moments = 0
+        self.by_kind = {"chat": 0, "audio": 0, "viewers": 0}
+        self.moment_times: list[float] = []   # когда ловили моменты (против дублей с клипами зрителей)
         self.last_moment: float | None = None
+
+    def register(self, kind: str, t: float, now: float) -> None:
+        self.moments += 1
+        self.by_kind[kind] = self.by_kind.get(kind, 0) + 1
+        self.last_moment = now
+        self.moment_times = [x for x in self.moment_times if now - x < 3600] + [t]
 
     def status_line(self, now: float) -> str:
         chat = self.detector.recent_messages(now, 60)
@@ -126,8 +138,12 @@ class Channel:
             parts.append(f"⚠️ запись стоит {rec_age / 60:.0f} мин")
         else:
             parts.append(f"🎥 {buffered:.1f} мин в буфере")
+        if self.audio and self.audio.last_db is not None and self.audio.baseline_db is not None:
+            parts.append(f"🔊 {self.audio.last_db:.0f} дБ (обычно {self.audio.baseline_db:.0f})")
         if self.last_moment:
-            parts.append(f"🔥 {self.moments} (последний {(now - self.last_moment) / 60:.0f} мин назад)")
+            k = self.by_kind
+            parts.append(f"🔥 {self.moments}: чат {k['chat']}, крик {k['audio']}, зрители {k['viewers']} "
+                         f"(последний {(now - self.last_moment) / 60:.0f} мин назад)")
         else:
             parts.append("🔥 пока не было")
         warn = " ⚠️ чат молчит" if chat == 0 and now - self.detector.started_at > 120 else ""
@@ -146,6 +162,8 @@ class App:
         self.chat = TwitchChat(self.on_chat)
         self.jobs: asyncio.Queue = asyncio.Queue(maxsize=50)
         self.clips_made = 0
+        self.user_ids: dict[str, str] = {}
+        self.seen_clips: set[str] = set()
         self.started = time.time()
         self.bot = make_bot(cfg, self.status_text)
         self.processor = ClipProcessor(cfg, self.bot)
@@ -159,24 +177,35 @@ class App:
             ch.detector.add_message(text, ts)
 
     async def ticker(self) -> None:
+        cooldown = self.cfg["detector"]["cooldown_seconds"]
         while True:
             await asyncio.sleep(1)
             now = time.time()
             for ch in list(self.channels.values()):
-                m = ch.detector.tick(now)
-                if m:
-                    ch.moments += 1
-                    ch.last_moment = now
-                    log.info("🔥 [%s] всплеск чата x%.1f (%.1f msg/s) %s",
-                             m.channel, m.score, m.peak_rate, " ".join(m.top_words))
+                found = [ch.detector.tick(now)]
+                if ch.audio:
+                    found.append(ch.audio.tick(now, ch.detector.ratio_between))
+                for m in found:
+                    if not m:
+                        continue
+                    if ch.last_moment and now - ch.last_moment < cooldown:
+                        log.info("[%s] момент (%s) совпал с недавним — пропускаю", ch.name, m.kind)
+                        continue
+                    ch.register(m.kind, m.peak, now)
+                    if m.kind == "audio":
+                        log.info("🔥 [%s] стример закричал/засмеялся: +%.0f дБ к обычному", m.channel, m.score)
+                    else:
+                        log.info("🔥 [%s] всплеск чата x%.1f (%.1f msg/s) %s",
+                                 m.channel, m.score, m.peak_rate, " ".join(m.top_words))
                     with self.moments_log.open("a", encoding="utf-8") as f:
                         f.write(json.dumps(asdict(m), ensure_ascii=False) + "\n")
                     asyncio.create_task(self.cut_later(ch, m))
 
     async def cut_later(self, ch: Channel, m: Moment) -> None:
         c = self.cfg["clip"]
-        t0 = m.start - c["pre_roll"]
-        t1 = m.end + c["post_roll"]
+        roll = self.cfg["audio"] if m.kind == "audio" else c
+        t0 = m.start - roll["pre_roll"]
+        t1 = m.end + roll["post_roll"]
         if t1 - t0 > c["max_seconds"]:  # длинный всплеск — держимся ближе к пику
             t0 = max(t0, m.peak - c["max_seconds"] * 0.7)
             t1 = t0 + c["max_seconds"]
@@ -190,18 +219,18 @@ class App:
             log.warning("[%s] нет записи для момента — пропускаю", ch.name)
             return
         try:
-            self.jobs.put_nowait((res, ch.name, asdict(m)))
+            md = asdict(m)
+            self.jobs.put_nowait((*res, ch.name, {"moment": md, "top_words": md.get("top_words", []),
+                                                  "source": f"https://twitch.tv/{ch.name}"}))
         except asyncio.QueueFull:
             log.warning("очередь монтажа переполнена — пропускаю момент")
             raw.unlink(missing_ok=True)
 
     async def worker(self) -> None:
         while True:
-            (src, offset, dur), channel, moment = await self.jobs.get()
+            src, offset, dur, channel, extra = await self.jobs.get()
             try:
-                await asyncio.to_thread(self.processor.process, src, offset, dur, channel,
-                                        {"moment": moment, "top_words": moment.get("top_words", []),
-                                         "source": f"https://twitch.tv/{channel}"})
+                await asyncio.to_thread(self.processor.process, src, offset, dur, channel, extra)
                 self.clips_made += 1  # считаем только готовые клипы
             except Exception as e:
                 log.error("[%s] монтаж не удался: %s", channel, e)
@@ -220,9 +249,11 @@ class App:
         if tw["channels"]:
             live = await asyncio.to_thread(self.api.live_status, tw["channels"])
             want |= {s["user_login"].lower() for s in live}
+            self.user_ids.update({s["user_login"].lower(): s["user_id"] for s in live})
         if tw["auto_discover"] and not tw["only_listed"]:
             streams = await asyncio.to_thread(self.api.top_streams, self.game_id, tw["languages"])
             streams.sort(key=lambda s: -s["viewer_count"])
+            self.user_ids.update({s["user_login"].lower(): s["user_id"] for s in streams})
             picked = [s["user_login"].lower() for s in streams
                       if s["viewer_count"] >= tw["min_viewers"]
                       and s["user_login"].lower() not in tw["blacklist"]]
@@ -251,6 +282,56 @@ class App:
                 log.error("не удалось обновить список стримов: %s", e)
             await asyncio.sleep(self.cfg["twitch"]["refresh_seconds"])
 
+    async def viewer_clips(self) -> None:
+        """Клипы, которые зрители сами нарезали на Twitch у записываемых стримеров."""
+        vc = self.cfg["viewer_clips"]
+        if not (vc["enabled"] and self.api):
+            return
+        done_file = Path(self.cfg["output"]["dir"]) / "twitch_clips_done.txt"
+        if done_file.exists():
+            self.seen_clips |= set(done_file.read_text().split())
+        tmp = Path(self.cfg["recorder"]["work_dir"]) / "_viewer_clips"
+        tmp.mkdir(parents=True, exist_ok=True)
+        while True:
+            await asyncio.sleep(vc["poll_seconds"])
+            since = datetime.now(timezone.utc) - timedelta(minutes=vc["max_age_minutes"])
+            for name, ch in list(self.channels.items()):
+                uid = self.user_ids.get(name)
+                if not uid:
+                    continue
+                try:
+                    clips = await asyncio.to_thread(self.api.channel_clips, uid,
+                                                    since.strftime("%Y-%m-%dT%H:%M:%SZ"))
+                except Exception as e:
+                    log.warning("[%s] не удалось получить клипы зрителей: %s", name, e)
+                    continue
+                for c in sorted(clips, key=lambda c: c["created_at"]):
+                    if c["id"] in self.seen_clips or float(c.get("duration", 0)) < vc["min_duration"]:
+                        continue
+                    self.seen_clips.add(c["id"])
+                    with done_file.open("a") as f:
+                        f.write(c["id"] + "\n")
+                    created = datetime.fromisoformat(c["created_at"].replace("Z", "+00:00")).timestamp()
+                    if created < self.started:
+                        continue          # клип сделан до запуска программы
+                    if any(created - 75 <= t <= created + 15 for t in ch.moment_times):
+                        log.info("[%s] зрители нарезали клип того же момента, что поймали мы — пропускаю", name)
+                        continue
+                    src = tmp / f"{c['id']}.mp4"
+                    r = await asyncio.to_thread(subprocess.run, [streamlink_bin(), "-f", "-o", str(src),
+                                                                 c["url"], "best"], capture_output=True)
+                    if r.returncode != 0 or not src.exists():
+                        log.warning("[%s] не скачался клип зрителей %s", name, c["url"])
+                        continue
+                    ch.register("viewers", created, time.time())
+                    log.info("🔥 [%s] зрители нарезали клип: «%s»", name, c["title"])
+                    try:
+                        self.jobs.put_nowait((src, 0.0, float(c["duration"]), name, {
+                            "moment": {"kind": "viewers"}, "top_words": [], "source": c["url"],
+                            "twitch_title": c["title"], "views": c.get("view_count")}))
+                    except asyncio.QueueFull:
+                        src.unlink(missing_ok=True)
+
     def status_text(self) -> str:
         hours = (time.time() - self.started) / 3600
         now = time.time()
@@ -259,10 +340,11 @@ class App:
         return (f"🟢 Работаю {hours:.1f} ч. Пишу {len(chans)} стримов:\n"
                 f"{lines or 'сейчас нет подходящих стримов'}\n\n"
                 f"Клипов за этот запуск: {self.clips_made} · в очереди на монтаж: {self.jobs.qsize()}\n"
-                f"💬 — сообщений чата за минуту, 🎥 — сколько записи хранится, 🔥 — пойманные моменты")
+                f"💬 — сообщений чата за минуту, 🎥 — сколько записи хранится, 🔊 — громкость сейчас,\n"
+                f"🔥 — пойманные моменты: взрыв чата, крик/смех стримера, клипы зрителей")
 
     async def run(self) -> None:
-        tasks = [self.chat.run_forever(), self.manager(), self.ticker(), self.worker()]
+        tasks = [self.chat.run_forever(), self.manager(), self.ticker(), self.worker(), self.viewer_clips()]
         if self.bot:
             tasks.append(asyncio.to_thread(self.bot.poll_forever))
             if self.bot.chat_id:

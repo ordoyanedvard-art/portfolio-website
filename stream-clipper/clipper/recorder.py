@@ -74,6 +74,23 @@ class SegmentIndex:
         return self.anchor_wall - (self.anchor_stream - stream_t)
 
 
+def segment_levels(path: Path, step: float = 0.5) -> list[tuple[float, float]]:
+    """Громкость звука куска по окнам step секунд: [(смещение_от_начала, dBFS)]."""
+    import numpy as np
+
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(path), "-vn",
+                        "-ac", "1", "-ar", "8000", "-f", "s16le", "-"], capture_output=True)
+    if r.returncode != 0 or not r.stdout:
+        return []
+    audio = np.frombuffer(r.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+    n = int(8000 * step)
+    out = []
+    for i in range(len(audio) // n):
+        rms = float(np.sqrt(np.mean(audio[i * n:(i + 1) * n] ** 2)))
+        out.append((i * step, 20 * np.log10(max(rms, 1e-5))))
+    return out
+
+
 class StreamRecorder:
     def __init__(self, channel: str, cfg: dict):
         self.channel = channel
@@ -81,6 +98,8 @@ class StreamRecorder:
         self.dir = Path(cfg["work_dir"]) / channel
         self.index = SegmentIndex(self.dir)
         self.proc: asyncio.subprocess.Process | None = None
+        self.on_levels = None          # callback([(unix-время, дБ)]) — громкость для детектора звука
+        self._levels_done: set[str] = set()
         self._task: asyncio.Task | None = None
         self._stopping = False
 
@@ -107,6 +126,7 @@ class StreamRecorder:
         shutil.rmtree(self.dir, ignore_errors=True)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.index.reset()
+        self._levels_done = set()
 
     async def _loop(self) -> None:
         backoff = 5
@@ -153,6 +173,20 @@ class StreamRecorder:
                 else:
                     keep.append(s)
             self.index.segments = keep
+            if self.on_levels:
+                await self._measure_levels()
+
+    async def _measure_levels(self) -> None:
+        """Громкость только что закрытых кусков -> детектор звука."""
+        names = {sg.path.name for sg in self.index.segments}
+        self._levels_done &= names
+        for sg in list(self.index.segments):
+            if sg.path.name in self._levels_done or not sg.path.exists():
+                continue
+            self._levels_done.add(sg.path.name)
+            levels = await asyncio.to_thread(segment_levels, sg.path)
+            if levels:
+                self.on_levels([(self.index.to_wall(sg.start + off), db) for off, db in levels])
 
     # --- нарезка ----------------------------------------------------------------
     def cut(self, t0: float, t1: float, dest: Path) -> tuple[Path, float, float] | None:

@@ -59,6 +59,10 @@ class TwitchAPI:
             return []
         return self.get("streams", [("user_login", l) for l in logins[:100]])["data"]
 
+    def channel_clips(self, broadcaster_id: str, since_iso: str) -> list[dict]:
+        params = [("broadcaster_id", broadcaster_id), ("started_at", since_iso), ("first", "20")]
+        return self.get("clips", params)["data"]
+
     def top_clips(self, game_id: str, since_iso: str, first: int = 50) -> list[dict]:
         params = [("game_id", game_id), ("started_at", since_iso), ("first", str(min(first, 100)))]
         return self.get("clips", params)["data"]

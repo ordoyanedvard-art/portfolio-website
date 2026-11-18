@@ -48,6 +48,26 @@ DEFAULTS: dict = {
             "ору", "лол", "кек", "+", "?????", "!!!",
         ],
     },
+    "audio": {                      # стример закричал / засмеялся
+        "enabled": True,
+        "delta_db": 10.0,           # на сколько дБ громче обычного
+        "min_db": -30.0,            # и не тише этого (иначе это не крик)
+        "window_seconds": 1.5,
+        "baseline_seconds": 600,
+        "warmup_seconds": 120,
+        "require_chat": True,       # засчитывать, только если оживился и чат
+        "confirm_seconds": 15,
+        "confirm_ratio": 1.5,       # чат хотя бы в 1.5 раза быстрее обычного
+        "cooldown_seconds": 90,
+        "pre_roll": 15,             # секунд до крика (что его вызвало)
+        "post_roll": 8,
+    },
+    "viewer_clips": {               # клипы, которые нарезали сами зрители на Twitch
+        "enabled": True,
+        "poll_seconds": 120,
+        "max_age_minutes": 20,      # брать клипы, созданные не раньше этого
+        "min_duration": 8,
+    },
     "clip": {
         "pre_roll": 25,             # секунд до начала всплеска
         "post_roll": 6,             # секунд после конца всплеска

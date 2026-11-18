@@ -43,8 +43,13 @@ def _multipart(fields: dict, files: dict) -> tuple[bytes, str]:
 def build_caption(meta: dict) -> str:
     tags = " ".join("#" + h for h in meta.get("hashtags", []))
     extra = [f"🎮 {meta.get('channel', '')}"]
-    score = (meta.get("moment") or {}).get("score")
-    if score:
+    moment = meta.get("moment") or {}
+    kind, score = moment.get("kind", "chat"), moment.get("score")
+    if kind == "viewers":
+        extra.append("✂️ клип зрителей")
+    elif kind == "audio" and score:
+        extra.append(f"🎤 крик/смех +{score} дБ")
+    elif score:
         extra.append(f"🔥 чат x{score}")
     if meta.get("views"):
         extra.append(f"👁 {meta['views']}")

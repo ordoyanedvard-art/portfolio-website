@@ -11,6 +11,7 @@ import re
 import statistics
 from collections import deque
 from dataclasses import dataclass, field
+from typing import Callable
 
 _EMOTE_RE = re.compile(r"[a-zA-Zа-яА-ЯёЁ+?!]+")
 
@@ -22,8 +23,9 @@ class Moment:
     peak: float           # секунда с максимальным темпом
     end: float            # когда всплеск утих
     score: float          # макс. отношение темпа к обычному
-    peak_rate: float      # сообщений/сек в пике
+    peak_rate: float      # сообщений/сек в пике (для звука — громкость пика, дБ)
     top_words: list[str] = field(default_factory=list)
+    kind: str = "chat"    # chat — взрыв чата, audio — стример закричал/засмеялся
 
 
 class ChatSpikeDetector:
@@ -79,6 +81,19 @@ class ChatSpikeDetector:
         while self.buckets and self.buckets[0][0] < horizon:
             self.buckets.popleft()
 
+    def ratio_between(self, t0: float, t1: float) -> float:
+        """Во сколько раз темп чата в [t0, t1] выше обычного (для подтверждения звука)."""
+        a, b = int(t0), int(t1)
+        buckets = list(self.buckets)
+        win = [m for sec, m, _ in buckets if a <= sec <= b]
+        if self._cur_sec is not None and a <= self._cur_sec <= b:
+            win.append(self._cur_msgs)
+        older = [m for sec, m, _ in buckets if sec < a]
+        if not win or len(older) < 30:
+            return 0.0
+        baseline = max(statistics.median(older), self.cfg["min_baseline_rate"])
+        return (sum(win) / max(1, b - a + 1)) / baseline
+
     def recent_messages(self, now: float, seconds: int = 60) -> int:
         """Сколько сообщений пришло за последние seconds секунд (для /status)."""
         horizon = int(now) - seconds
@@ -133,4 +148,67 @@ class ChatSpikeDetector:
             self.hot_since = None
             self.cooldown_until = now + c["cooldown_seconds"]
             return m
+        return None
+
+
+class AudioSpikeDetector:
+    """Стример закричал или засмеялся: громкость резко выше обычной для него.
+
+    Громкость приходит кусками по 0.5 с (dBFS) из рекордера. Обычный уровень —
+    медиана за последние ~10 минут. Скачок на delta_db дБ (в среднем за window
+    секунд) — кандидат. Если require_chat, кандидат становится моментом, только
+    когда в следующие confirm_seconds оживляется и чат: громкий взрыв в игре
+    без реакции зрителей клипа не даст."""
+
+    STEP = 0.5
+
+    def __init__(self, channel: str, cfg: dict, started_at: float):
+        self.channel = channel
+        self.cfg = cfg
+        self.started_at = started_at
+        self.levels: deque[tuple[float, float]] = deque()   # (unix-время, дБ)
+        self.candidates: list[tuple[float, float, float]] = []  # (время, дБ пика, превышение)
+        self.cooldown_until = 0.0
+        self.last_db: float | None = None
+        self.baseline_db: float | None = None
+
+    def add_levels(self, items: list[tuple[float, float]]) -> None:
+        c = self.cfg
+        n = max(1, round(c["window_seconds"] / self.STEP))
+        for t, db in items:
+            self.levels.append((t, db))
+            while self.levels and self.levels[0][0] < t - c["baseline_seconds"]:
+                self.levels.popleft()
+            recent = list(self.levels)[-n:]
+            older = [d for tt, d in list(self.levels)[:-n] if tt < t - c["window_seconds"]]
+            self.last_db = sum(d for _, d in recent) / len(recent)
+            if len(older) < 60:              # меньше 30 секунд истории — рано судить
+                continue
+            self.baseline_db = statistics.median(older)
+            excess = self.last_db - self.baseline_db
+            if (t - self.started_at < c["warmup_seconds"] or t < self.cooldown_until
+                    or self.last_db < c["min_db"] or excess < c["delta_db"]):
+                continue
+            if self.candidates and t - self.candidates[-1][0] < 3:   # тот же крик — уточняем пик
+                if self.last_db > self.candidates[-1][1]:
+                    self.candidates[-1] = (t, self.last_db, excess)
+                continue
+            self.candidates.append((t, self.last_db, excess))
+
+    def tick(self, now: float, chat_ratio: Callable[[float, float], float] | None = None) -> Moment | None:
+        c = self.cfg
+        for cand in list(self.candidates):
+            t, db, excess = cand
+            if c["require_chat"]:
+                if now < t + c["confirm_seconds"]:
+                    continue
+                self.candidates.remove(cand)
+                ratio = chat_ratio(t - 2, t + c["confirm_seconds"]) if chat_ratio else 0.0
+                if ratio < c["confirm_ratio"]:
+                    continue                  # чат не отреагировал — вероятно, звук игры
+            else:
+                self.candidates.remove(cand)
+            self.candidates.clear()
+            self.cooldown_until = now + c["cooldown_seconds"]
+            return Moment(self.channel, t - 2, t, t + 2, round(excess, 1), round(db, 1), [], "audio")
         return None
