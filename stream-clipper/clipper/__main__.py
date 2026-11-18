@@ -23,6 +23,9 @@ from .config import load_config, streamlink_bin
 def _setup_logging(verbose: bool) -> None:
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO,
                         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s", datefmt="%H:%M:%S")
+    # служебные сетевые логи (скачивание модели whisper, запросы к API) — только ошибки
+    for noisy in ("httpx", "httpx2", "httpcore", "huggingface_hub", "urllib3", "faster_whisper"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 async def _chat_test(cfg: dict, channel: str, seconds: int) -> None:
