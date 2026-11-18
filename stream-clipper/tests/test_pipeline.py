@@ -165,3 +165,66 @@ def test_wav_loader_bypasses_pyav(sample_video, tmp_path):
     audio = Transcriber._load_wav(wav)
     assert audio.dtype.name == "float32" and 2.9 * 16000 <= len(audio) <= 3.1 * 16000
     assert 0 < abs(audio).max() <= 1.0
+
+
+class FakeTG:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, method, params=None, files=None, timeout=60):
+        self.calls.append((method, params or {}, files))
+        return {"ok": True, "result": {"message_id": 42, "username": "test_bot"}}
+
+
+def _clip_dir(tmp_path, name="c1"):
+    d = tmp_path / "clips" / name
+    d.mkdir(parents=True)
+    (d / "clip.mp4").write_bytes(b"x" * 100)
+    (d / "meta.json").write_text(json.dumps({"channel": "evelone2004", "title": "Ограбление!",
+                                             "description": "d", "hashtags": ["gta6"], "duration": 30,
+                                             "moment": {"score": 4.6}}), encoding="utf-8")
+    return d
+
+
+def test_telegram_pending_then_start(tmp_path):
+    from clipper.telegram import TelegramBot
+    bot = TelegramBot("T", tmp_path)
+    bot.api = fake = FakeTG()
+    d = _clip_dir(tmp_path)
+    assert bot.send_clip(d) is None and fake.calls == []        # ещё не привязан — в очередь
+    bot.handle({"message": {"chat": {"id": 777}, "text": "/start"}})
+    sent = [c for c in fake.calls if c[0] == "sendVideo"]
+    assert len(sent) == 1 and sent[0][1]["chat_id"] == "777"
+    assert "Ограбление!" in sent[0][1]["caption"] and "#gta6" in sent[0][1]["caption"]
+    # чужой пользователь не может перепривязать бота
+    bot.handle({"message": {"chat": {"id": 999}, "text": "/start"}})
+    assert bot.chat_id == "777"
+    # состояние переживает перезапуск
+    assert TelegramBot("T", tmp_path).chat_id == "777"
+
+
+def test_telegram_buttons(tmp_path):
+    from clipper.telegram import TelegramBot
+    bot = TelegramBot("T", tmp_path, chat_id="777")
+    bot.api = fake = FakeTG()
+    d = _clip_dir(tmp_path)
+    sid = bot.send_clip(d)
+    msg = {"message_id": 42, "chat": {"id": 777}}
+    bot.handle({"callback_query": {"id": "q1", "data": f"pub:{sid}", "message": msg}})
+    assert json.loads((d / "meta.json").read_text(encoding="utf-8"))["telegram"]["status"] == "published"
+    # чужие нажатия игнорируются
+    bot.handle({"callback_query": {"id": "q2", "data": f"del:{sid}",
+                                   "message": {"message_id": 42, "chat": {"id": 1}}}})
+    assert d.exists()
+    bot.handle({"callback_query": {"id": "q3", "data": f"del:{sid}", "message": msg}})
+    assert not d.exists()
+    assert any(c[0] == "deleteMessage" for c in fake.calls)
+
+
+def test_multipart_builds(tmp_path):
+    from clipper.telegram import _multipart
+    f = tmp_path / "clip.mp4"
+    f.write_bytes(b"VIDEO")
+    body, ctype = _multipart({"chat_id": "1", "caption": "Привет"}, {"video": f})
+    assert ctype.startswith("multipart/form-data; boundary=")
+    assert b"VIDEO" in body and "Привет".encode() in body and b'filename="clip.mp4"' in body

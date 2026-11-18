@@ -28,11 +28,20 @@ def _slug(s: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]+", "_", s)[:40]
 
 
+def make_bot(cfg: dict, status=None):
+    tg = cfg.get("telegram") or {}
+    if not tg.get("token"):
+        return None
+    from .telegram import TelegramBot
+    return TelegramBot(tg["token"], Path(cfg["output"]["dir"]), tg.get("chat_id", ""), status)
+
+
 class ClipProcessor:
     """Тяжёлая часть (whisper + ffmpeg) — синхронно, в отдельном потоке."""
 
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, notifier=None):
         self.cfg = cfg
+        self.notifier = notifier
         self.transcriber = Transcriber(cfg["transcribe"]) if cfg["transcribe"]["enabled"] else None
         self.out_root = Path(cfg["output"]["dir"])
         self.face_cache_file = self.out_root / "facecams_auto.json"
@@ -89,6 +98,11 @@ class ClipProcessor:
         if self.cfg["output"]["keep_raw"]:
             shutil.copy(src, out_dir / "source.ts")
         log.info("✅ клип готов: %s — %s", out_dir, meta.title)
+        if self.notifier:
+            try:
+                self.notifier.send_clip(out_dir)
+            except Exception as e:  # Telegram не должен ронять монтаж
+                log.warning("не удалось отправить клип в Telegram: %s", e)
         return out_dir
 
 
@@ -110,7 +124,10 @@ class App:
         self.channels: dict[str, Channel] = {}
         self.chat = TwitchChat(self.on_chat)
         self.jobs: asyncio.Queue = asyncio.Queue(maxsize=50)
-        self.processor = ClipProcessor(cfg)
+        self.clips_made = 0
+        self.started = time.time()
+        self.bot = make_bot(cfg, self.status_text)
+        self.processor = ClipProcessor(cfg, self.bot)
         self.moments_log = Path(cfg["output"]["dir"]) / "moments.jsonl"
         self.moments_log.parent.mkdir(parents=True, exist_ok=True)
 
@@ -159,6 +176,7 @@ class App:
         while True:
             (src, offset, dur), channel, moment = await self.jobs.get()
             try:
+                self.clips_made += 1
                 await asyncio.to_thread(self.processor.process, src, offset, dur, channel,
                                         {"moment": moment, "top_words": moment.get("top_words", []),
                                          "source": f"https://twitch.tv/{channel}"})
@@ -210,8 +228,19 @@ class App:
                 log.error("не удалось обновить список стримов: %s", e)
             await asyncio.sleep(self.cfg["twitch"]["refresh_seconds"])
 
+    def status_text(self) -> str:
+        hours = (time.time() - self.started) / 3600
+        names = ", ".join(sorted(self.channels)) or "никого (нет подходящих стримов)"
+        return (f"🟢 Работаю {hours:.1f} ч.\nПишу {len(self.channels)} стримов: {names}\n"
+                f"Клипов за этот запуск: {self.clips_made}\nВ очереди на монтаж: {self.jobs.qsize()}")
+
     async def run(self) -> None:
-        await asyncio.gather(self.chat.run_forever(), self.manager(), self.ticker(), self.worker())
+        tasks = [self.chat.run_forever(), self.manager(), self.ticker(), self.worker()]
+        if self.bot:
+            tasks.append(asyncio.to_thread(self.bot.poll_forever))
+            if self.bot.chat_id:
+                await asyncio.to_thread(self.bot.flush_pending)
+        await asyncio.gather(*tasks)
 
 
 # --- режим «популярные клипы Twitch» (без записи и анализа чата) -----------------
@@ -228,7 +257,7 @@ def run_twitch_clips(cfg: dict) -> None:
              and c["language"] in tw["languages"]
              and c["broadcaster_name"].lower() not in tw["blacklist"]]
     clips.sort(key=lambda c: -c["view_count"])
-    proc = ClipProcessor(cfg)
+    proc = ClipProcessor(cfg, make_bot(cfg))
     tmp = Path(cfg["recorder"]["work_dir"]) / "_clips"
     tmp.mkdir(parents=True, exist_ok=True)
     for c in clips[: mode["max_per_run"]]:

@@ -128,6 +128,10 @@ def load_config(path: str | Path = "config.yaml") -> dict:
     cfg = _merge(DEFAULTS, user or {})
     cfg["twitch"]["client_id"] = os.environ.get("TWITCH_CLIENT_ID", "")
     cfg["twitch"]["client_secret"] = os.environ.get("TWITCH_CLIENT_SECRET", "")
+    cfg["telegram"] = {
+        "token": os.environ.get("TELEGRAM_BOT_TOKEN", "").strip(),
+        "chat_id": os.environ.get("TELEGRAM_CHAT_ID", "").strip(),
+    }
     cfg["twitch"]["channels"] = [c.lower().lstrip("#") for c in cfg["twitch"]["channels"]]
     cfg["twitch"]["blacklist"] = [c.lower().lstrip("#") for c in cfg["twitch"]["blacklist"]]
     return cfg

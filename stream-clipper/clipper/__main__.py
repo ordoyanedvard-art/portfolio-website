@@ -63,6 +63,19 @@ def _check(cfg: dict) -> int:
         print("⚠️  faster-whisper не установлен — клипы будут без субтитров")
     print(("✅" if os.environ.get("ANTHROPIC_API_KEY") else "⚠️ ") +
           " ANTHROPIC_API_KEY " + ("задан" if os.environ.get("ANTHROPIC_API_KEY") else "не задан — шаблонные заголовки"))
+    tg = cfg.get("telegram") or {}
+    if tg.get("token"):
+        try:
+            from .pipeline import make_bot
+            bot = make_bot(cfg)
+            me = bot.api("getMe")["result"]
+            who = "привязан к вашему чату" if bot.chat_id else "ещё не привязан — напишите ему /start"
+            print(f"✅ Telegram-бот @{me['username']} работает, {who}")
+        except Exception as e:
+            print(f"❌ Telegram: {e}")
+            ok = False
+    else:
+        print("⚠️  TELEGRAM_BOT_TOKEN не задан — клипы не будут приходить в Telegram")
     tw = cfg["twitch"]
     if tw["client_id"]:
         try:
