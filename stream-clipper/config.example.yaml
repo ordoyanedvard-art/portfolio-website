@@ -1,0 +1,56 @@
+# Скопируйте в config.yaml и правьте под себя.
+# Всё, чего здесь нет, берётся из значений по умолчанию (clipper/config.py).
+
+twitch:
+  game_name: "Grand Theft Auto VI"   # если Twitch назовёт игру иначе — `python -m clipper top` покажет ошибку
+  # game_id: "12345"                 # можно указать напрямую
+
+  auto_discover: true     # сам брать самые смотримые русские стримы по GTA 6
+  languages: ["ru"]       # только русскоязычные стримы
+  min_viewers: 5000       # только крупные стримеры
+  top_n: 6                # сколько стримов писать одновременно (нагрузка на CPU/диск)
+  refresh_seconds: 300
+
+  # Ваши стримеры: пишутся всегда, когда они в эфире с GTA 6 или нет.
+  # Логины сверяйте командой `python -m clipper top` — она покажет, кто сейчас в эфире.
+  channels:
+    # - buster
+    # - exile
+    # - mokrivskyi
+    # - shadowkekw
+    # - strogo
+    # - evelone2004
+  only_listed: false      # true — писать ТОЛЬКО стримеров из списка выше
+  blacklist: []           # кого никогда не трогать
+
+detector:
+  trigger_ratio: 3.0          # чат в 3 раза быстрее обычного = момент
+  min_window_messages: 25     # и минимум 25 сообщений за 12 секунд
+  min_reaction_share: 0.15    # и ≥15% сообщений — реакции (KEKW, ахах, WTF, +…)
+  cooldown_seconds: 90        # не чаще одного клипа в 1.5 минуты на стримера
+
+clip:
+  pre_roll: 25    # сколько секунд ДО всплеска брать (чат реагирует с опозданием)
+  post_roll: 6
+  max_seconds: 59
+
+render:
+  layout: blur    # blur — кадр целиком на размытом фоне; split — вебка сверху, игра снизу; crop — центр
+  watermark: ""   # например "@gta6_moments"
+  # Для layout: split — где вебка у стримера (доли кадра: x, y, ширина, высота).
+  # Пример: вебка в левом верхнем углу, 25% ширины и 30% высоты:
+  facecams:
+    # buster: [0.0, 0.0, 0.25, 0.30]
+
+transcribe:
+  model: small      # на слабом CPU — base; с видеокартой — large-v3
+  language: ru
+
+titles:
+  enabled: true     # нужен ANTHROPIC_API_KEY в .env; без него — шаблонные заголовки
+  model: claude-opus-5-5
+  effort: low
+  language: ru
+
+output:
+  dir: data/clips

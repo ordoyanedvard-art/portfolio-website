@@ -1,0 +1,9 @@
+services:
+  clipper:
+    build: .
+    restart: unless-stopped        # перезапуск после падения или перезагрузки сервера
+    env_file: .env
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data           # здесь появятся готовые клипы: data/clips/
+    command: ["run"]
