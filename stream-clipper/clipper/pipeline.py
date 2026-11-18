@@ -199,10 +199,10 @@ class App:
         while True:
             (src, offset, dur), channel, moment = await self.jobs.get()
             try:
-                self.clips_made += 1
                 await asyncio.to_thread(self.processor.process, src, offset, dur, channel,
                                         {"moment": moment, "top_words": moment.get("top_words", []),
                                          "source": f"https://twitch.tv/{channel}"})
+                self.clips_made += 1  # считаем только готовые клипы
             except Exception as e:
                 log.error("[%s] монтаж не удался: %s", channel, e)
             finally:

@@ -241,3 +241,23 @@ def test_status_lines(tmp_path):
     line = ch.status_line(now)
     assert "evelone2004" in line and "💬 30/мин" in line and "запись запускается" in line
     assert "пока не было" in line
+
+
+def test_telegram_resends_unsent_after_restart(tmp_path):
+    from clipper.telegram import TelegramBot
+    root = tmp_path / "clips"
+    old = _clip_dir(tmp_path, "2026-11-18/old")          # до привязки бота — не трогаем
+    bot = TelegramBot("T", root, chat_id="777")
+    bot.state["bound_at"] = time.time() + 1
+    bot._save()
+    time.sleep(1.1)
+    new = _clip_dir(tmp_path, "2026-11-19/new")          # готов, но не отправлен
+    bot2 = TelegramBot("T", root)                         # «перезапуск»
+    bot2.api = fake = FakeTG()
+    bot2.flush_pending()
+    sent = [c for c in fake.calls if c[0] == "sendVideo"]
+    assert len(sent) == 1
+    assert "telegram" in json.loads((new / "meta.json").read_text(encoding="utf-8"))
+    assert "telegram" not in json.loads((old / "meta.json").read_text(encoding="utf-8"))
+    bot2.flush_pending()                                  # второй раз не дублирует
+    assert len([c for c in fake.calls if c[0] == "sendVideo"]) == 1

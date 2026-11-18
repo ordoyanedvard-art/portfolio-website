@@ -76,6 +76,9 @@ class TelegramBot:
         self.state.setdefault("offset", 0)
         if chat_id:
             self.state["chat_id"] = str(chat_id)
+        if self.state.get("chat_id") and "bound_at" not in self.state:
+            self.state["bound_at"] = time.time()
+        self.clips_root = Path(data_dir)
 
     # --- низкий уровень -----------------------------------------------------------
     def api(self, method: str, params: dict | None = None, files: dict | None = None,
@@ -147,10 +150,28 @@ class TelegramBot:
         log.info("📨 клип отправлен в Telegram")
         return sid
 
+    def unsent_clips(self) -> list[Path]:
+        """Готовые клипы после привязки бота, которые так и не ушли в Telegram
+        (например, программу перезапустили, пока шла отправка)."""
+        since = self.state.get("bound_at", time.time())
+        out = []
+        for meta in self.clips_root.glob("*/*/meta.json"):
+            d = meta.parent
+            try:
+                if (d / "clip.mp4").exists() and meta.stat().st_mtime >= since \
+                        and "telegram" not in json.loads(meta.read_text(encoding="utf-8")):
+                    out.append(d)
+            except (OSError, ValueError):
+                continue
+        return sorted(out, key=lambda d: (d / "meta.json").stat().st_mtime)[-MAX_PENDING:]
+
     def flush_pending(self) -> None:
         with self.lock:
             pending, self.state["pending"] = list(self.state["pending"]), []
             self._save()
+        pending = list(dict.fromkeys(pending + [str(d) for d in self.unsent_clips()]))
+        if pending:
+            log.info("досылаю в Telegram клипов: %d", len(pending))
         for d in pending:
             if Path(d, "clip.mp4").exists():
                 try:
@@ -171,6 +192,7 @@ class TelegramBot:
                 fresh = not self.chat_id
                 with self.lock:
                     self.state["chat_id"] = chat
+                    self.state.setdefault("bound_at", time.time())
                     self._save()
                 self._say("✅ Готово! Сюда будут приходить новые клипы.\n"
                           "Под каждым — кнопки «Опубликовал» и «Удалить».\n/status — что сейчас пишется.")
