@@ -43,12 +43,18 @@ def detect_faces(images: list) -> list[list[Box]]:
     return out
 
 
-def stable_face(per_frame: list[list[Box]], min_share: float = 0.4) -> Box | None:
-    """Лицо, которое в большинстве кадров стоит примерно на одном месте."""
-    frames = [f for f in per_frame]
+def stable_face(per_frame: list[list[Box]], min_share: float = 0.4,
+                hint: Box | None = None) -> Box | None:
+    """Лицо стримера: стоит на одном месте в большинстве кадров.
+
+    Если таких лиц несколько (в вебке гости, в кадре ещё чья-то камера),
+    берём то, что ближе к прошлому положению стримера (hint), а без подсказки —
+    самое крупное: стример обычно ближе всех к камере."""
+    frames = list(per_frame)
     if not frames:
         return None
-    best: list[Box] = []
+    need = max(2, round(len(frames) * min_share))
+    clusters: list[list[Box]] = []
     for cand in (b for f in frames for b in f):
         cx, cy = cand[0] + cand[2] / 2, cand[1] + cand[3] / 2
         group = []
@@ -58,12 +64,29 @@ def stable_face(per_frame: list[list[Box]], min_share: float = 0.4) -> Box | Non
                 if abs(bx - cx) < 0.05 and abs(by - cy) < 0.05 and 0.6 < b[3] / cand[3] < 1.6:
                     group.append(b)
                     break  # не больше одного совпадения на кадр
-        if len(group) > len(best):
-            best = group
-    if len(best) < max(2, round(len(frames) * min_share)):
+        if len(group) >= need:
+            clusters.append(group)
+    if not clusters:
         return None
-    n = len(best)
-    return tuple(sum(b[i] for b in best) / n for i in range(4))  # type: ignore[return-value]
+    avg = [tuple(sum(b[i] for b in g) / len(g) for i in range(4)) for g in clusters]
+    # одинаковые лица из разных кандидатов схлопываем
+    uniq: list[tuple[Box, int]] = []
+    for box, g in zip(avg, clusters):
+        cx, cy = box[0] + box[2] / 2, box[1] + box[3] / 2
+        for i, (u, n) in enumerate(uniq):
+            if abs(u[0] + u[2] / 2 - cx) < 0.05 and abs(u[1] + u[3] / 2 - cy) < 0.05:
+                if len(g) > n:
+                    uniq[i] = (box, len(g))
+                break
+        else:
+            uniq.append((box, len(g)))
+    if hint is not None:
+        hx, hy = hint[0] + hint[2] / 2, hint[1] + hint[3] / 2
+        near = [(u, n) for u, n in uniq
+                if abs(u[0] + u[2] / 2 - hx) < 0.08 and abs(u[1] + u[3] / 2 - hy) < 0.08]
+        if near:
+            return max(near, key=lambda un: un[1])[0]  # type: ignore[return-value]
+    return max(uniq, key=lambda un: un[0][2] * un[0][3] * (0.5 + un[1] / len(frames)))[0]  # type: ignore[return-value]
 
 
 def webcam_rect(images: list, face: Box) -> Box:
@@ -140,7 +163,10 @@ def face_crop(face: Box, src_aspect: float, panel_aspect: float, zoom: float,
 
 
 def find_facecam(src: Path, offset: float, dur: float, panel_aspect: float,
-                 zoom: float = 2.6, samples: int = 8) -> list[float] | None:
+                 zoom: float = 4.0, samples: int = 8, hint: Box | None = None,
+                 found: dict | None = None) -> list[float] | None:
+    """Кроп крупного плана. В found (если передан) кладётся найденное лицо —
+    по нему в следующий раз узнаём того же стримера среди нескольких людей."""
     try:
         import cv2
     except ImportError:
@@ -155,9 +181,11 @@ def find_facecam(src: Path, offset: float, dur: float, panel_aspect: float,
         if not images:
             return None
         h, w = images[0].shape[:2]
-        face = stable_face(detect_faces(images))
+        face = stable_face(detect_faces(images), hint=hint)
         if face is None:
             return None
         rect = webcam_rect(images, face)
     log.info("вебка: %s, лицо: %s", [round(v, 3) for v in rect], [round(v, 3) for v in face])
+    if found is not None:
+        found["face"] = [round(float(v), 4) for v in face]
     return face_crop(face, w / h, panel_aspect, zoom, rect)

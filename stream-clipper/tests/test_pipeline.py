@@ -421,3 +421,115 @@ def test_viewer_clips_are_downloaded_and_queued(tmp_path, monkeypatch):
     src, off, dur, name, extra = app.jobs.get_nowait()
     assert name == "evelone2004" and dur == 25.0 and extra["moment"]["kind"] == "viewers"
     assert app.channels["evelone2004"].by_kind["viewers"] == 1
+
+
+def test_stable_face_prefers_largest_or_hint():
+    from clipper.facecam import stable_face
+    streamer = (0.05, 0.60, 0.09, 0.16)
+    guest = (0.20, 0.62, 0.05, 0.09)
+    frames = [[streamer, guest] for _ in range(8)]
+    assert abs(stable_face(frames)[0] - 0.05) < 1e-6              # крупнее — это стример
+    assert abs(stable_face(frames, hint=guest)[0] - 0.20) < 1e-6  # но подсказка из прошлых клипов главнее
+
+
+def test_reaction_share_relative_to_usual():
+    cfg = DEFAULTS["detector"]
+    t0 = 1_700_000_000.0
+    det2 = ChatSpikeDetector("s", cfg, t0)
+    for s in range(300):  # обычный чат: 40% сообщений — «реакции»
+        for i in range(5):
+            det2.add_message("KEKW" if i < 2 else "привет", t0 + s + i * 0.15)
+        det2.tick(t0 + s + 0.95)
+    mixed = []
+    for s in range(20):   # 30/с, реакций 43% — как обычно
+        for i in range(30):
+            det2.add_message("LUL" if i % 7 < 3 else "ну", t0 + 300 + s + i * 0.03)
+        m = det2.tick(t0 + 300 + s + 0.95)
+        if m:
+            mixed.append(m)
+    assert mixed == []
+    assert det2.base_share > 0.3
+    hot = simulate(det2, t0 + 400, 20, 30, "KEKW ахахах") + simulate(det2, t0 + 420, 40, 5)
+    assert len(hot) == 1
+
+
+def _process_with_verdict(tmp_path, monkeypatch, score):
+    import clipper.pipeline as pl
+    from clipper.judge import Verdict
+    monkeypatch.setattr(pl, "judge_available", lambda cfg: True)
+    seen = {}
+
+    def fake_judge(cfg, lang, channel, src, offset, dur, transcript, chat_lines, kind):
+        seen.update(chat=chat_lines, kind=kind)
+        return Verdict(score=score, reason="стример угнал полицейскую машину", title="Угнал копов!",
+                       description="d", hashtags=["gta6"])
+
+    monkeypatch.setattr(pl, "judge", fake_judge)
+    cfg = load_config(tmp_path / "none.yaml")
+    cfg["transcribe"]["enabled"] = False
+    cfg["output"]["dir"] = str(tmp_path / "clips")
+    out = pl.ClipProcessor(cfg).process(tmp_path / "src.ts", 0, 3, "evelone2004",
+                                        {"moment": {"kind": "audio"}, "chat_lines": ["KEKW", "ахах"]})
+    return out, seen, cfg
+
+
+def test_judge_rejects_boring(sample_video, tmp_path, monkeypatch):
+    (tmp_path / "src.ts").write_bytes(sample_video.read_bytes())
+    out, seen, cfg = _process_with_verdict(tmp_path, monkeypatch, 3)
+    assert out is None and seen == {"chat": ["KEKW", "ахах"], "kind": "audio"}
+    rej = (tmp_path / "clips" / "rejected.jsonl").read_text(encoding="utf-8")
+    assert '"score": 3' in rej
+    assert not list((tmp_path / "clips").glob("*/*/clip.mp4"))
+
+
+def test_judge_keeps_good(sample_video, tmp_path, monkeypatch):
+    (tmp_path / "src.ts").write_bytes(sample_video.read_bytes())
+    out, _, _ = _process_with_verdict(tmp_path, monkeypatch, 8)
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert meta["title"] == "Угнал копов!" and meta["judge"]["score"] == 8
+    assert "chat_lines" not in meta and (out / "clip.mp4").exists()
+    from clipper.telegram import build_caption
+    assert "🧠 8/10" in build_caption(meta)
+
+
+def test_judge_request_through_real_sdk(sample_video, tmp_path, monkeypatch):
+    """Настоящий SDK anthropic против локального поддельного сервера."""
+    import http.server
+    import threading
+
+    from clipper.judge import judge
+    captured = {}
+    answer = {"score": 8, "reason": "смешно", "title": "Т", "description": "Д", "hashtags": ["#gta6"]}
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            captured["path"] = self.path
+            captured["body"] = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            body = json.dumps({"id": "msg_1", "type": "message", "role": "assistant",
+                               "model": "claude-opus-5-5", "stop_reason": "end_turn", "stop_sequence": None,
+                               "content": [{"type": "text", "text": json.dumps(answer, ensure_ascii=False)}],
+                               "usage": {"input_tokens": 10, "output_tokens": 10}}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", f"http://127.0.0.1:{srv.server_port}")
+    v = judge(DEFAULTS["judge"], "ru", "evelone2004", sample_video, 0, 6, "чат смотрите",
+              ["KEKW", "ахах"], "chat")
+    srv.shutdown()
+    assert v is not None and v.score == 8 and v.hashtags == ["gta6"]
+    body = captured["body"]
+    assert captured["path"].startswith("/v1/messages")
+    assert body["model"] == "claude-opus-5-5" and body["output_config"]["effort"] == "low"
+    assert body["output_config"]["format"]["type"] == "json_schema"
+    content = body["messages"][0]["content"]
+    assert sum(1 for b in content if b["type"] == "image") == 3
+    assert "KEKW" in content[-1]["text"] and "чат смотрите" in content[-1]["text"]

@@ -44,6 +44,7 @@ class ChatSpikeDetector:
         self.hot_peak_rate = 0.0
         self.hot_score = 0.0
         self.cooldown_until = 0.0
+        self.base_share = 0.0
 
     # --- ввод ---------------------------------------------------------------
     def is_reaction(self, text: str) -> bool:
@@ -117,6 +118,9 @@ class ChatSpikeDetector:
         baseline = statistics.median(older) if len(older) >= 30 else 0.0
         baseline = max(baseline, self.cfg["min_baseline_rate"])
         share = (w_react / w_msgs) if w_msgs else 0.0
+        older_msgs = sum(b[1] for b in self.buckets if b[0] < sec - win)
+        older_react = sum(b[2] for b in self.buckets if b[0] < sec - win)
+        self.base_share = (older_react / older_msgs) if older_msgs >= 50 else 0.0
         return rate / baseline, rate, w_msgs, share
 
     def tick(self, now: float) -> Moment | None:
@@ -129,8 +133,10 @@ class ChatSpikeDetector:
         if self.hot_since is None:
             if now < self.cooldown_until:
                 return None
+            # реакций должно стать заметно больше, чем обычно в этом чате
+            need_share = max(c["min_reaction_share"], self.base_share + c.get("reaction_share_gain", 0.10))
             if (ratio >= c["trigger_ratio"] and w_msgs >= c["min_window_messages"]
-                    and share >= c["min_reaction_share"]):
+                    and share >= need_share):
                 self.hot_since = now - c["window_seconds"] / 2
                 self.hot_peak_t, self.hot_peak_rate, self.hot_score = now, rate, ratio
                 self._words = {}

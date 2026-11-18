@@ -189,11 +189,12 @@ def video_filter(r: dict, facecam: list[float] | None, layout: str, has_subs: bo
         # сверху стример крупно, ниже полоса субтитров, ниже игра целиком (16:9, без обрезки),
         # всё остальное — размытый кадр игры
         g = (f"[0:v]split=3[a][b][c];"
-             f"[a]crop=iw*{fw}:ih*{fh}:iw*{fx}:ih*{fy},scale={W}:{top_h}:force_original_aspect_ratio=increase,"
-             f"crop={W}:{top_h},setsar=1[top];"
+             f"[a]crop=iw*{fw}:ih*{fh}:iw*{fx}:ih*{fy},"
+             f"scale={W}:{top_h}:force_original_aspect_ratio=increase:flags=lanczos,"
+             f"crop={W}:{top_h},unsharp=5:5:0.7:5:5:0.0,setsar=1[top];"
              f"[b]scale={W // 4}:{H // 4}:force_original_aspect_ratio=increase,crop={W // 4}:{H // 4},"
              f"boxblur=10:2,scale={W}:{H},eq=brightness=-0.15,setsar=1[bg];"
-             f"[c]scale={W}:-2,setsar=1[game];"
+             f"[c]scale={W}:-2:flags=lanczos,setsar=1[game];"
              f"[bg][top]overlay=0:0[t1];[t1][game]overlay=0:{game_y}[v0]")
     elif layout == "crop":
         g = f"[0:v]scale=-2:{H},crop={W}:{H},setsar=1[v0]"

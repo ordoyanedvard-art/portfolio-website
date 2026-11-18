@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import time
+from collections import deque
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -18,7 +19,9 @@ from .detector import AudioSpikeDetector, ChatSpikeDetector, Moment
 from .editor import Transcriber, extract_wav, render
 from .facecam import find_facecam
 from .recorder import StreamRecorder
-from .titles import make_meta
+from .judge import available as judge_available
+from .judge import judge
+from .titles import ClipMeta, make_meta
 from .twitch_api import TwitchAPI
 
 log = logging.getLogger("pipeline")
@@ -44,7 +47,7 @@ class ClipProcessor:
         self.notifier = notifier
         self.transcriber = Transcriber(cfg["transcribe"]) if cfg["transcribe"]["enabled"] else None
         self.out_root = Path(cfg["output"]["dir"])
-        self.face_cache_file = self.out_root / "facecams_auto_v2.json"  # v2: с учётом рамки вебки
+        self.face_cache_file = self.out_root / "facecams_auto_v3.json"  # v3: рамка вебки + лицо стримера
         try:
             self.face_cache: dict = json.loads(self.face_cache_file.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -59,19 +62,26 @@ class ClipProcessor:
         if not r["auto_facecam"]:
             return None
         from .editor import split_top
-        found = find_facecam(src, offset, dur, r["width"] / split_top(r), r["face_zoom"])
-        if found:
-            self.face_cache[channel] = found
+        entry = self.face_cache.get(channel)
+        if isinstance(entry, list):          # старый формат кэша: только кроп
+            entry = {"crop": entry}
+        entry = entry or {}
+        info: dict = {}
+        crop = find_facecam(src, offset, dur, r["width"] / split_top(r), r["face_zoom"],
+                            hint=entry.get("face"), found=info)
+        if crop:
+            self.face_cache[channel] = {"crop": crop, "face": info.get("face")}
             self.out_root.mkdir(parents=True, exist_ok=True)
             self.face_cache_file.write_text(json.dumps(self.face_cache, indent=1), encoding="utf-8")
-            log.info("[%s] лицо найдено: %s", channel, found)
-            return found
-        cached = self.face_cache.get(channel)
+            log.info("[%s] лицо найдено: %s", channel, crop)
+            return crop
+        cached = entry.get("crop")
         log.info("[%s] лицо в клипе не найдено — %s", channel,
                  "беру прошлое положение" if cached else "делаю без крупного плана")
         return cached
 
-    def process(self, src: Path, offset: float, dur: float, channel: str, extra: dict) -> Path:
+    def process(self, src: Path, offset: float, dur: float, channel: str, extra: dict) -> Path | None:
+        """Готовый клип (папка) или None, если редактор счёл момент скучным."""
         stamp = datetime.now().strftime("%Y-%m-%d/%H%M%S")
         out_dir = self.out_root / f"{stamp}_{_slug(channel)}"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -85,12 +95,33 @@ class ClipProcessor:
                 log.exception("расшифровка не удалась: %s", e)
             finally:
                 wav.unlink(missing_ok=True)
+        extra = dict(extra)
+        chat_lines = extra.pop("chat_lines", [])
+        kind = (extra.get("moment") or {}).get("kind", "chat")
+        verdict = None
+        if judge_available(self.cfg["judge"]):
+            verdict = judge(self.cfg["judge"], self.cfg["titles"]["language"], channel, src, offset, dur,
+                            transcript, chat_lines, kind)
+            if verdict and verdict.score < self.cfg["judge"]["min_score"]:
+                log.info("🗑 [%s] редактор отбросил момент (%d/10): %s", channel, verdict.score, verdict.reason)
+                with (self.out_root / "rejected.jsonl").open("a", encoding="utf-8") as f:
+                    f.write(json.dumps({"channel": channel, "kind": kind, "score": verdict.score,
+                                        "reason": verdict.reason, "transcript": transcript[:500],
+                                        "time": datetime.now().isoformat(timespec="seconds")},
+                                       ensure_ascii=False) + "\n")
+                shutil.rmtree(out_dir, ignore_errors=True)
+                return None
         facecam = self.facecam_for(src, offset, dur, channel)
         render(src, offset, dur, out_dir, self.cfg["render"], words, facecam)
-        meta = make_meta(self.cfg["titles"], channel, transcript, extra.get("top_words", []))
+        if verdict:
+            meta = ClipMeta(title=verdict.title, description=verdict.description, hashtags=verdict.hashtags)
+        else:
+            meta = make_meta(self.cfg["titles"], channel, transcript, extra.get("top_words", []))
         info = {"channel": channel, "duration": round(dur, 1), "transcript": transcript,
-                "subtitle_words": len(words), "facecam": facecam,
+                "subtitle_words": len(words), "facecam": facecam, "chat_lines_seen": len(chat_lines),
                 **meta.model_dump(), **extra}
+        if verdict:
+            info["judge"] = {"score": verdict.score, "reason": verdict.reason}
         (out_dir / "meta.json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
         (out_dir / "caption.txt").write_text(
             f"{meta.title}\n\n{meta.description}\n\n" + " ".join("#" + h for h in meta.hashtags) + "\n",
@@ -115,10 +146,18 @@ class Channel:
         if self.audio:
             self.recorder.on_levels = self.audio.add_levels
         self.user_id: str | None = None
+        self.recent_chat: deque[tuple[float, str]] = deque(maxlen=6000)   # для редактора
         self.moments = 0
         self.by_kind = {"chat": 0, "audio": 0, "viewers": 0}
         self.moment_times: list[float] = []   # когда ловили моменты (против дублей с клипами зрителей)
         self.last_moment: float | None = None
+
+    def chat_between(self, t0: float, t1: float, limit: int = 80) -> list[str]:
+        lines = [txt for ts, txt in list(self.recent_chat) if t0 <= ts <= t1]
+        if len(lines) > limit:   # равномерно по всему моменту, а не только начало
+            step = len(lines) / limit
+            lines = [lines[int(i * step)] for i in range(limit)]
+        return lines
 
     def register(self, kind: str, t: float, now: float) -> None:
         self.moments += 1
@@ -162,6 +201,7 @@ class App:
         self.chat = TwitchChat(self.on_chat)
         self.jobs: asyncio.Queue = asyncio.Queue(maxsize=50)
         self.clips_made = 0
+        self.rejected = 0
         self.user_ids: dict[str, str] = {}
         self.seen_clips: set[str] = set()
         self.started = time.time()
@@ -175,6 +215,7 @@ class App:
         ch = self.channels.get(channel)
         if ch:
             ch.detector.add_message(text, ts)
+            ch.recent_chat.append((ts, text[:200]))
 
     async def ticker(self) -> None:
         cooldown = self.cfg["detector"]["cooldown_seconds"]
@@ -221,7 +262,8 @@ class App:
         try:
             md = asdict(m)
             self.jobs.put_nowait((*res, ch.name, {"moment": md, "top_words": md.get("top_words", []),
-                                                  "source": f"https://twitch.tv/{ch.name}"}))
+                                                  "source": f"https://twitch.tv/{ch.name}",
+                                                  "chat_lines": ch.chat_between(m.start - 5, m.end + 15)}))
         except asyncio.QueueFull:
             log.warning("очередь монтажа переполнена — пропускаю момент")
             raw.unlink(missing_ok=True)
@@ -230,8 +272,11 @@ class App:
         while True:
             src, offset, dur, channel, extra = await self.jobs.get()
             try:
-                await asyncio.to_thread(self.processor.process, src, offset, dur, channel, extra)
-                self.clips_made += 1  # считаем только готовые клипы
+                done = await asyncio.to_thread(self.processor.process, src, offset, dur, channel, extra)
+                if done:
+                    self.clips_made += 1  # считаем только готовые клипы
+                else:
+                    self.rejected += 1
             except Exception as e:
                 log.error("[%s] монтаж не удался: %s", channel, e)
             finally:
@@ -328,6 +373,7 @@ class App:
                     try:
                         self.jobs.put_nowait((src, 0.0, float(c["duration"]), name, {
                             "moment": {"kind": "viewers"}, "top_words": [], "source": c["url"],
+                            "chat_lines": ch.chat_between(created - 40, created + 5),
                             "twitch_title": c["title"], "views": c.get("view_count")}))
                     except asyncio.QueueFull:
                         src.unlink(missing_ok=True)
@@ -339,7 +385,8 @@ class App:
         lines = "\n".join(ch.status_line(now) for ch in sorted(chans, key=lambda c: c.name))
         return (f"🟢 Работаю {hours:.1f} ч. Пишу {len(chans)} стримов:\n"
                 f"{lines or 'сейчас нет подходящих стримов'}\n\n"
-                f"Клипов за этот запуск: {self.clips_made} · в очереди на монтаж: {self.jobs.qsize()}\n"
+                f"Клипов за этот запуск: {self.clips_made} · отсеял редактор: {self.rejected} · "
+                f"в очереди на монтаж: {self.jobs.qsize()}\n"
                 f"💬 — сообщений чата за минуту, 🎥 — сколько записи хранится, 🔊 — громкость сейчас,\n"
                 f"🔥 — пойманные моменты: взрыв чата, крик/смех стримера, клипы зрителей")
 

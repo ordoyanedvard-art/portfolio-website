@@ -25,7 +25,7 @@ DEFAULTS: dict = {
         "blacklist": [],            # стримеры, которых не трогаем
     },
     "recorder": {
-        "quality": "720p60,720p,best",
+        "quality": "1080p60,1080p,best",  # 1080p: вебка в кадре крупнее и чётче
         "segment_seconds": 6,
         "buffer_seconds": 300,      # сколько последних секунд держать на диске
         "work_dir": "data/buffer",
@@ -39,6 +39,7 @@ DEFAULTS: dict = {
         "release_ratio": 1.8,       # ниже этого — всплеск закончился
         "min_window_messages": 25,  # минимум сообщений в окне
         "min_reaction_share": 0.15, # доля «реакций» (KEKW, ахах, WTF…) в окне
+        "reaction_share_gain": 0.10,  # и на столько больше обычной доли реакций в этом чате
         "max_hot_seconds": 40,
         "cooldown_seconds": 90,     # пауза между клипами одного стримера
         "reactions": [
@@ -82,7 +83,7 @@ DEFAULTS: dict = {
         "split_top_ratio": 0.42,    # доля высоты под крупный план стримера
         "split_gap_ratio": 0.12,    # полоса под субтитры между стримером и игрой
         "auto_facecam": True,       # сам находить лицо стримера в кадре
-        "face_zoom": 2.6,           # крупность: высота кадра = высота лица × это число
+        "face_zoom": 4.0,           # крупность: высота кадра = высота лица × это число (в пределах вебки)
         "crf": 21,
         "preset": "veryfast",
         "font": "DejaVu Sans",
@@ -99,6 +100,13 @@ DEFAULTS: dict = {
         "device": "auto",           # auto/cpu/cuda
         "compute_type": "int8",
         "language": None,           # None = автоопределение
+    },
+    "judge": {                      # нейросеть-редактор: отсеивает скучные моменты до монтажа
+        "enabled": True,            # работает, только если задан ANTHROPIC_API_KEY
+        "model": "claude-opus-5-5",
+        "effort": "low",
+        "min_score": 6,             # монтировать моменты с оценкой от этой (1–10)
+        "frames": 3,                # сколько кадров показать редактору
     },
     "titles": {
         "enabled": True,            # работает, только если задан ANTHROPIC_API_KEY
