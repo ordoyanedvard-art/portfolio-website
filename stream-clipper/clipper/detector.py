@@ -79,6 +79,14 @@ class ChatSpikeDetector:
         while self.buckets and self.buckets[0][0] < horizon:
             self.buckets.popleft()
 
+    def recent_messages(self, now: float, seconds: int = 60) -> int:
+        """Сколько сообщений пришло за последние seconds секунд (для /status)."""
+        horizon = int(now) - seconds
+        total = sum(m for sec, m, _ in list(self.buckets) if sec >= horizon)
+        if self._cur_sec is not None and self._cur_sec >= horizon:
+            total += self._cur_msgs
+        return total
+
     # --- оценка ---------------------------------------------------------------
     def stats(self, now: float) -> tuple[float, float, int, float]:
         """-> (ratio, window_rate, window_msgs, reaction_share)"""

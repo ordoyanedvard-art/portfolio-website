@@ -228,3 +228,16 @@ def test_multipart_builds(tmp_path):
     body, ctype = _multipart({"chat_id": "1", "caption": "Привет"}, {"video": f})
     assert ctype.startswith("multipart/form-data; boundary=")
     assert b"VIDEO" in body and "Привет".encode() in body and b'filename="clip.mp4"' in body
+
+
+def test_status_lines(tmp_path):
+    from clipper.pipeline import Channel
+    cfg = load_config(tmp_path / "none.yaml")
+    cfg["recorder"]["work_dir"] = str(tmp_path / "buf")
+    ch = Channel("evelone2004", cfg)
+    now = time.time()
+    for i in range(30):
+        ch.detector.add_message("KEKW", now - 30 + i)
+    line = ch.status_line(now)
+    assert "evelone2004" in line and "💬 30/мин" in line and "запись запускается" in line
+    assert "пока не было" in line

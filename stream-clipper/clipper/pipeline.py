@@ -111,6 +111,27 @@ class Channel:
         self.name = name
         self.detector = ChatSpikeDetector(name, cfg["detector"], time.time())
         self.recorder = StreamRecorder(name, cfg["recorder"])
+        self.moments = 0
+        self.last_moment: float | None = None
+
+    def status_line(self, now: float) -> str:
+        chat = self.detector.recent_messages(now, 60)
+        segs = list(self.recorder.index.segments)
+        buffered = sum(sg.end - sg.start for sg in segs) / 60
+        rec_age = now - self.recorder.index.anchor_wall if segs else None
+        parts = [f"💬 {chat}/мин"]
+        if rec_age is None:
+            parts.append("🎥 запись запускается")
+        elif rec_age > 60:
+            parts.append(f"⚠️ запись стоит {rec_age / 60:.0f} мин")
+        else:
+            parts.append(f"🎥 {buffered:.1f} мин в буфере")
+        if self.last_moment:
+            parts.append(f"🔥 {self.moments} (последний {(now - self.last_moment) / 60:.0f} мин назад)")
+        else:
+            parts.append("🔥 пока не было")
+        warn = " ⚠️ чат молчит" if chat == 0 and now - self.detector.started_at > 120 else ""
+        return f"• {self.name} — " + " · ".join(parts) + warn
 
 
 class App:
@@ -144,6 +165,8 @@ class App:
             for ch in list(self.channels.values()):
                 m = ch.detector.tick(now)
                 if m:
+                    ch.moments += 1
+                    ch.last_moment = now
                     log.info("🔥 [%s] всплеск чата x%.1f (%.1f msg/s) %s",
                              m.channel, m.score, m.peak_rate, " ".join(m.top_words))
                     with self.moments_log.open("a", encoding="utf-8") as f:
@@ -230,9 +253,13 @@ class App:
 
     def status_text(self) -> str:
         hours = (time.time() - self.started) / 3600
-        names = ", ".join(sorted(self.channels)) or "никого (нет подходящих стримов)"
-        return (f"🟢 Работаю {hours:.1f} ч.\nПишу {len(self.channels)} стримов: {names}\n"
-                f"Клипов за этот запуск: {self.clips_made}\nВ очереди на монтаж: {self.jobs.qsize()}")
+        now = time.time()
+        chans = list(self.channels.values())
+        lines = "\n".join(ch.status_line(now) for ch in sorted(chans, key=lambda c: c.name))
+        return (f"🟢 Работаю {hours:.1f} ч. Пишу {len(chans)} стримов:\n"
+                f"{lines or 'сейчас нет подходящих стримов'}\n\n"
+                f"Клипов за этот запуск: {self.clips_made} · в очереди на монтаж: {self.jobs.qsize()}\n"
+                f"💬 — сообщений чата за минуту, 🎥 — сколько записи хранится, 🔥 — пойманные моменты")
 
     async def run(self) -> None:
         tasks = [self.chat.run_forever(), self.manager(), self.ticker(), self.worker()]
