@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -61,17 +62,50 @@ class Transcriber:
 
     def _run(self, wav: Path, vad: bool) -> list[Word]:
         segments, _info = self._load().transcribe(
-            self._load_wav(wav), word_timestamps=True, vad_filter=vad, language=self.cfg["language"],
-            condition_on_previous_text=False)
+            self._load_wav(wav), word_timestamps=True, language=self.cfg["language"],
+            condition_on_previous_text=False, beam_size=5, temperature=[0.0, 0.2, 0.4],
+            vad_filter=vad,
+            # мягче стандартного: речь под громкий звук игры не выкидывается
+            vad_parameters={"threshold": 0.35, "min_silence_duration_ms": 600, "speech_pad_ms": 300},
+        )
         words: list[Word] = []
         for seg in segments:
-            if seg.no_speech_prob > 0.8 and seg.avg_logprob < -1.0:
-                continue  # шум/музыка, а не речь
+            if is_hallucination(seg.text, seg.avg_logprob, seg.no_speech_prob, seg.compression_ratio):
+                log.debug("отброшено как выдуманное: %r", seg.text)
+                continue
             for w in seg.words or []:
                 t = w.word.strip()
-                if t:
+                if t and w.probability >= 0.15:
                     words.append(Word(w.start, w.end, t))
-        return words
+        return fix_timings(words)
+
+
+# Фразы, которые whisper «придумывает» на шуме и музыке (наследие обучающих субтитров)
+_HALLUCINATIONS = re.compile(
+    r"субтитр|dimatorzok|торжок|продолжение следует|спасибо за просмотр|подписывайтесь|"
+    r"ставьте лайк|редактор|корректор|amara\.org|до новых встреч|thanks for watching",
+    re.IGNORECASE)
+
+
+def is_hallucination(text: str, avg_logprob: float, no_speech_prob: float, compression_ratio: float) -> bool:
+    if _HALLUCINATIONS.search(text):
+        return True
+    if compression_ratio > 2.4:            # одно и то же слово по кругу
+        return True
+    if avg_logprob < -1.0 and no_speech_prob > 0.5:
+        return True
+    return no_speech_prob > 0.8 and avg_logprob < -0.6
+
+
+def fix_timings(words: list[Word]) -> list[Word]:
+    """Слова не налезают друг на друга и не висят на экране дольше 1.2 с."""
+    out: list[Word] = []
+    for i, w in enumerate(words):
+        start = max(w.start, out[-1].end if out else 0.0)
+        nxt = words[i + 1].start if i + 1 < len(words) else w.end + 0.6
+        end = min(max(w.end, start + 0.15), nxt, start + 1.2)
+        out.append(Word(start, max(end, start + 0.1), w.text))
+    return out
 
 
 # --- субтитры (ASS) ------------------------------------------------------------

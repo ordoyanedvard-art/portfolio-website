@@ -48,7 +48,7 @@ render:
     # evelone2004: [0.0, 0.55, 0.2, 0.3]
 
 transcribe:
-  model: small      # на слабом CPU — base; с видеокартой — large-v3
+  model: medium     # точнее small, но медленнее; на слабом CPU — small; с видеокартой — large-v3
   language: ru
 
 titles:

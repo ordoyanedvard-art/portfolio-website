@@ -118,7 +118,7 @@ class StreamRecorder:
                 f"{shlex.quote(streamlink_bin())} --twitch-disable-ads --twitch-low-latency --stdout "
                 f"--retry-open 3 {shlex.quote(url)} {shlex.quote(self.cfg['quality'])} "
                 f"| ffmpeg -hide_banner -loglevel error -i pipe:0 -map 0:v:0? -map 0:a:0? -c copy "
-                f"-f segment -segment_time {seg} -reset_timestamps 1 "
+                f"-f segment -segment_time {seg} "
                 f"-segment_list {shlex.quote(str(self.dir / 'list.csv'))} "
                 f"-segment_list_type csv -segment_list_flags +live "
                 f"{shlex.quote(str(self.dir / '%010d.ts'))}"
@@ -164,12 +164,13 @@ class StreamRecorder:
         if not segs:
             return None
         dest.parent.mkdir(parents=True, exist_ok=True)
-        lst = dest.with_suffix(".txt")
-        lst.write_text("".join(f"file '{s.path.resolve()}'\n" for s in segs), encoding="utf-8")
+        # Куски пишутся с непрерывными метками времени, поэтому склеиваем их побайтно
+        # (concat-протокол для MPEG-TS). Склейка через concat-демуксер с обнулёнными
+        # метками растягивала видео и сдвигала звук — субтитры расходились с речью.
+        joined = "concat:" + "|".join(str(sg.path.resolve()) for sg in segs)
         r = subprocess.run(
-            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0",
-             "-i", str(lst), "-c", "copy", str(dest)], capture_output=True)
-        lst.unlink(missing_ok=True)
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", joined,
+             "-map", "0:v:0?", "-map", "0:a:0?", "-c", "copy", str(dest)], capture_output=True)
         if r.returncode != 0:
             log.error("[%s] склейка не удалась: %s", self.channel, r.stderr.decode()[-300:])
             return None

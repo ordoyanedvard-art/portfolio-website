@@ -261,3 +261,64 @@ def test_telegram_resends_unsent_after_restart(tmp_path):
     assert "telegram" not in json.loads((old / "meta.json").read_text(encoding="utf-8"))
     bot2.flush_pending()                                  # второй раз не дублирует
     assert len([c for c in fake.calls if c[0] == "sendVideo"]) == 1
+
+
+def test_cut_keeps_audio_in_sync(tmp_path):
+    """Щелчок звучит ровно в начале каждой секунды потока. После записи кусками,
+    склейки и вырезки щелчок должен оказаться ровно там, где его ждут субтитры."""
+    import numpy as np
+    from clipper.editor import Transcriber, extract_wav
+    from clipper.recorder import StreamRecorder
+
+    rec = StreamRecorder("sync", dict(DEFAULTS["recorder"], work_dir=str(tmp_path / "buf"), segment_seconds=4))
+    rec.dir.mkdir(parents=True)
+    subprocess.run(
+        f"ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=320x180:rate=30 "
+        f"-f lavfi -i \"sine=frequency=1000:sample_rate=48000,volume='if(lt(mod(t,1),0.03),1,0)':eval=frame\" "
+        f"-t 30 -c:v libx264 -preset ultrafast -g 30 -c:a aac -f mpegts - | "
+        f"ffmpeg -hide_banner -loglevel error -i pipe:0 -map 0:v:0 -map 0:a:0 -c copy -f segment "
+        f"-segment_time 4 -segment_list {rec.dir / 'list.csv'} -segment_list_type csv {rec.dir / '%010d.ts'}",
+        shell=True, check=True)
+    rec.index.poll(now=1_000_000.0)
+    s0, s1 = 10.3, 20.3                                  # окно во времени потока
+    res = rec.cut(rec.index.to_wall(s0), rec.index.to_wall(s1), tmp_path / "cut.ts")
+    assert res is not None
+    src, offset, dur = res
+    wav = tmp_path / "a.wav"
+    extract_wav(src, offset, dur, wav)
+    audio = Transcriber._load_wav(wav)
+    loud = np.flatnonzero(np.abs(audio) > 0.04)
+    first = loud[0] / 16000
+    assert abs(first - 0.7) < 0.06, first               # щелчок на 11.0 с потока
+    onsets = [loud[0]] + [b for a, b in zip(loud, loud[1:]) if b - a > 8000]
+    assert all(abs((o / 16000 - 0.7) - round(o / 16000 - 0.7)) < 0.06 for o in onsets)
+
+
+def test_hallucination_filter_and_timings():
+    from clipper.editor import fix_timings, is_hallucination
+    assert is_hallucination("Субтитры сделал DimaTorzok", -0.3, 0.1, 1.2)
+    assert is_hallucination("Продолжение следует...", -0.2, 0.1, 1.1)
+    assert is_hallucination("да да да да да да да да да да", -0.3, 0.1, 3.0)
+    assert not is_hallucination("Чат, смотрите, я угнал копскую тачку", -0.3, 0.1, 1.3)
+    ws = fix_timings([Word(0.0, 0.9, "а"), Word(0.5, 0.8, "б"), Word(5.0, 9.0, "в")])
+    assert ws[1].start >= ws[0].end                       # без наложений
+    assert ws[2].end - ws[2].start <= 1.2 + 1e-9          # не висит на экране вечно
+
+
+def test_webcam_rect_stops_at_moving_gameplay():
+    import numpy as np
+    from clipper.facecam import face_crop, webcam_rect
+    rng = np.random.default_rng(0)
+    frames = []
+    for _ in range(8):                                  # «игра» меняется каждый кадр
+        blocks = rng.integers(0, 255, (54, 96, 3), dtype=np.uint8)   # крупные пятна, как в игре
+        f = np.repeat(np.repeat(blocks, 10, axis=0), 10, axis=1)
+        f[300:480, 20:260] = 90                         # неподвижная вебка
+        f[330:390, 110:160] = 200                       # «лицо» в ней
+        frames.append(f)
+    face = (110 / 960, 330 / 540, 50 / 960, 60 / 540)
+    x, y, w, h = webcam_rect(frames, face)
+    assert abs(x - 20 / 960) < 0.01 and abs(y - 300 / 540) < 0.015
+    assert abs(x + w - 260 / 960) < 0.01 and abs(y + h - 480 / 540) < 0.015
+    cx, cy, cw, ch = face_crop(face, 16 / 9, 1080 / 806, 2.6, (x, y, w, h))
+    assert cx >= x - 1e-6 and cy >= y - 1e-6 and cx + cw <= x + w + 1e-6 and cy + ch <= y + h + 1e-6

@@ -44,7 +44,7 @@ class ClipProcessor:
         self.notifier = notifier
         self.transcriber = Transcriber(cfg["transcribe"]) if cfg["transcribe"]["enabled"] else None
         self.out_root = Path(cfg["output"]["dir"])
-        self.face_cache_file = self.out_root / "facecams_auto.json"
+        self.face_cache_file = self.out_root / "facecams_auto_v2.json"  # v2: с учётом рамки вебки
         try:
             self.face_cache: dict = json.loads(self.face_cache_file.read_text(encoding="utf-8"))
         except (OSError, ValueError):
