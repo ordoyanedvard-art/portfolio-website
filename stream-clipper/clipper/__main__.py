@@ -34,7 +34,7 @@ async def _chat_test(cfg: dict, channel: str, seconds: int) -> None:
     from .detector import ChatSpikeDetector
 
     det = ChatSpikeDetector(channel, cfg["detector"], time.time())
-    chat = TwitchChat(lambda ch, text, ts: det.add_message(text, ts))
+    chat = TwitchChat(lambda ch, text, ts, nick="": det.add_message(text, ts))
     await chat.join(channel)
     task = asyncio.create_task(chat.run_forever())
     end = time.time() + seconds if seconds else float("inf")

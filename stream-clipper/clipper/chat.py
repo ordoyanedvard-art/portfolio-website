@@ -14,7 +14,8 @@ HOST, PORT = "irc.chat.twitch.tv", 6697
 
 
 class TwitchChat:
-    def __init__(self, on_message: Callable[[str, str, float], None]):
+    def __init__(self, on_message: Callable[[str, str, float, str], None]):
+        """on_message(канал, текст, время, ник автора)"""
         self.on_message = on_message
         self.channels: set[str] = set()
         self._writer: asyncio.StreamWriter | None = None
@@ -73,9 +74,20 @@ class TwitchChat:
             if line.startswith("PING"):
                 await self._send("PONG" + line[4:])
                 continue
-            parsed = parse_privmsg(line)
+            parsed = parse_privmsg_full(line)
             if parsed:
-                self.on_message(parsed[0], parsed[1], time.time())
+                self.on_message(parsed[0], parsed[2], time.time(), parsed[1])
+
+
+def parse_privmsg_full(line: str) -> tuple[str, str, str] | None:
+    """-> (канал, ник, текст)"""
+    if line.startswith("@"):
+        line = line.split(" ", 1)[1] if " " in line else ""
+    parsed = parse_privmsg(line)
+    if not parsed:
+        return None
+    nick = line[1:].split("!", 1)[0].lower() if line.startswith(":") else ""
+    return parsed[0], nick, parsed[1]
 
 
 def parse_privmsg(line: str) -> tuple[str, str] | None:

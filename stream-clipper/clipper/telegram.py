@@ -53,6 +53,8 @@ def build_caption(meta: dict) -> str:
         extra.append(f"🔥 чат x{score}")
     if meta.get("views"):
         extra.append(f"👁 {meta['views']}")
+    if (meta.get("score") or {}).get("total") is not None:
+        extra.append(f"⭐ {meta['score']['total']}/100")
     if meta.get("judge"):
         extra.append(f"🧠 {meta['judge']['score']}/10")
     text = f"{meta.get('title', '')}\n\n{meta.get('description', '')}\n\n{tags}\n\n{' · '.join(extra)}"

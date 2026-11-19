@@ -177,6 +177,7 @@ class AudioSpikeDetector:
         self.cooldown_until = 0.0
         self.last_db: float | None = None
         self.baseline_db: float | None = None
+        self.loud_events: deque[tuple[float, float]] = deque(maxlen=500)  # (время, превышение дБ)
 
     def add_levels(self, items: list[tuple[float, float]]) -> None:
         c = self.cfg
@@ -192,6 +193,8 @@ class AudioSpikeDetector:
                 continue
             self.baseline_db = statistics.median(older)
             excess = self.last_db - self.baseline_db
+            if excess >= c["delta_db"] * 0.6 and self.last_db >= c["min_db"]:
+                self.loud_events.append((t, excess))   # для оценки момента, даже без подтверждения
             if (t - self.started_at < c["warmup_seconds"] or t < self.cooldown_until
                     or self.last_db < c["min_db"] or excess < c["delta_db"]):
                 continue
@@ -200,6 +203,10 @@ class AudioSpikeDetector:
                     self.candidates[-1] = (t, self.last_db, excess)
                 continue
             self.candidates.append((t, self.last_db, excess))
+
+    def max_excess_between(self, t0: float, t1: float) -> float:
+        """Насколько громче обычного было в [t0, t1] (0 — ничего громкого)."""
+        return max((e for t, e in list(self.loud_events) if t0 <= t <= t1), default=0.0)
 
     def tick(self, now: float, chat_ratio: Callable[[float, float], float] | None = None) -> Moment | None:
         c = self.cfg

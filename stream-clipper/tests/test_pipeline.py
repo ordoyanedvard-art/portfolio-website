@@ -533,3 +533,56 @@ def test_judge_request_through_real_sdk(sample_video, tmp_path, monkeypatch):
     content = body["messages"][0]["content"]
     assert sum(1 for b in content if b["type"] == "image") == 3
     assert "KEKW" in content[-1]["text"] and "чат смотрите" in content[-1]["text"]
+
+
+def _history(t0, seconds, per_sec, users, texts):
+    out = []
+    for s_ in range(seconds):
+        for i in range(per_sec):
+            k = s_ * per_sec + i
+            out.append((t0 + s_ + i / per_sec, texts[k % len(texts)], f"user{k % users}"))
+    return out
+
+
+def test_scoring_strong_vs_weak():
+    from clipper.scoring import chat_features, reaction_weight, score_moment
+    assert reaction_weight("KEKW KEKW") == 1.0 and reaction_weight("ахахахах") == 1.0
+    assert reaction_weight("ЧТО???") == 1.0 and reaction_weight("+") == 0.3
+    assert reaction_weight("привет всем") == 0.0
+    t0 = 1_700_000_000.0
+    calm = _history(t0, 300, 3, 40, ["привет", "+", "го в тачку", "KEKW", "норм"])
+    # настоящий момент: 60 разных людей смеются, стример орёт
+    strong = calm + _history(t0 + 300, 15, 18, 200, ["KEKW", "ахахах", "WTF???", "ору", "клип"])
+    f = chat_features(strong, t0 + 300, t0 + 315)
+    total, parts = score_moment("chat", 6.0, f, 13.0)
+    assert total >= 70, parts
+    # чат быстрее, но это те же 5 человек спамят «+» — слабо
+    weak = calm + _history(t0 + 300, 15, 10, 5, ["+", "+", "го"])
+    f2 = chat_features(weak, t0 + 300, t0 + 315)
+    total2, parts2 = score_moment("chat", 3.2, f2, 0.0)
+    assert total2 < 45, parts2
+    assert score_moment("viewers", 0, f2, 0)[0] == 80
+
+
+def test_app_scores_and_caps_per_hour(tmp_path):
+    import clipper.pipeline as pl
+    from clipper.detector import Moment
+    cfg = load_config(tmp_path / "none.yaml")
+    cfg["twitch"].update(auto_discover=False, client_id="")
+    cfg["recorder"]["work_dir"] = str(tmp_path / "buf")
+    cfg["output"]["dir"] = str(tmp_path / "out")
+    app = pl.App(cfg)
+    ch = pl.Channel("evelone2004", cfg)
+    t0 = time.time() - 400
+    ch.recent_chat.extend(_history(t0, 300, 3, 40, ["привет", "+", "норм"]))
+    ch.recent_chat.extend(_history(t0 + 300, 15, 18, 200, ["KEKW", "ахахах", "WTF???"]))
+    m = Moment("evelone2004", t0 + 300, t0 + 307, t0 + 315, 6.0, 18.0, ["kekw"])
+    results = [app.score(ch, m) for _ in range(6)]
+    assert sum(r is not None for r in results) == cfg["scoring"]["max_per_hour"]
+    assert results[0]["total"] >= 45 and app.weak == 6 - cfg["scoring"]["max_per_hour"]
+
+
+def test_parse_privmsg_full_keeps_nick():
+    from clipper.chat import parse_privmsg_full
+    assert parse_privmsg_full(":Vasya!vasya@vasya.tmi.twitch.tv PRIVMSG #evelone2004 :KEKW") == \
+        ("evelone2004", "vasya", "KEKW")

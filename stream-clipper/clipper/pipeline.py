@@ -19,6 +19,7 @@ from .detector import AudioSpikeDetector, ChatSpikeDetector, Moment
 from .editor import Transcriber, extract_wav, render
 from .facecam import find_facecam
 from .recorder import StreamRecorder
+from .scoring import chat_features, score_moment
 from .judge import available as judge_available
 from .judge import judge
 from .titles import ClipMeta, make_meta
@@ -146,14 +147,15 @@ class Channel:
         if self.audio:
             self.recorder.on_levels = self.audio.add_levels
         self.user_id: str | None = None
-        self.recent_chat: deque[tuple[float, str]] = deque(maxlen=6000)   # для редактора
+        self.recent_chat: deque[tuple[float, str, str]] = deque(maxlen=20000)  # (время, текст, ник)
         self.moments = 0
         self.by_kind = {"chat": 0, "audio": 0, "viewers": 0}
         self.moment_times: list[float] = []   # когда ловили моменты (против дублей с клипами зрителей)
+        self.accepted: list[float] = []       # когда моменты прошли оценку (лимит в час)
         self.last_moment: float | None = None
 
     def chat_between(self, t0: float, t1: float, limit: int = 80) -> list[str]:
-        lines = [txt for ts, txt in list(self.recent_chat) if t0 <= ts <= t1]
+        lines = [txt for ts, txt, _ in list(self.recent_chat) if t0 <= ts <= t1]
         if len(lines) > limit:   # равномерно по всему моменту, а не только начало
             step = len(lines) / limit
             lines = [lines[int(i * step)] for i in range(limit)]
@@ -202,6 +204,7 @@ class App:
         self.jobs: asyncio.Queue = asyncio.Queue(maxsize=50)
         self.clips_made = 0
         self.rejected = 0
+        self.weak = 0
         self.user_ids: dict[str, str] = {}
         self.seen_clips: set[str] = set()
         self.started = time.time()
@@ -211,11 +214,11 @@ class App:
         self.moments_log.parent.mkdir(parents=True, exist_ok=True)
 
     # --- чат -> детектор ------------------------------------------------------
-    def on_chat(self, channel: str, text: str, ts: float) -> None:
+    def on_chat(self, channel: str, text: str, ts: float, nick: str = "") -> None:
         ch = self.channels.get(channel)
         if ch:
             ch.detector.add_message(text, ts)
-            ch.recent_chat.append((ts, text[:200]))
+            ch.recent_chat.append((ts, text[:200], nick))
 
     async def ticker(self) -> None:
         cooldown = self.cfg["detector"]["cooldown_seconds"]
@@ -254,6 +257,9 @@ class App:
             t0 = t1 - c["min_seconds"]
         # ждём, пока нужные куски допишутся на диск
         await asyncio.sleep(max(0, t1 - time.time()) + self.cfg["recorder"]["segment_seconds"] * 2 + 3)
+        score = self.score(ch, m)
+        if score is None:
+            return
         raw = Path(self.cfg["recorder"]["work_dir"]) / "_cuts" / f"{ch.name}_{int(m.start)}.ts"
         res = await asyncio.to_thread(ch.recorder.cut, t0, t1, raw)
         if not res:
@@ -262,11 +268,43 @@ class App:
         try:
             md = asdict(m)
             self.jobs.put_nowait((*res, ch.name, {"moment": md, "top_words": md.get("top_words", []),
+                                                  "score": score,
                                                   "source": f"https://twitch.tv/{ch.name}",
                                                   "chat_lines": ch.chat_between(m.start - 5, m.end + 15)}))
         except asyncio.QueueFull:
             log.warning("очередь монтажа переполнена — пропускаю момент")
             raw.unlink(missing_ok=True)
+
+    def score(self, ch: "Channel", m: Moment) -> dict | None:
+        """Бесплатная оценка момента. None — слабый момент или лимит в час исчерпан."""
+        sc = self.cfg["scoring"]
+        if not sc["enabled"]:
+            return {}
+        if m.kind == "audio":
+            t0, t1 = m.peak - 2, m.peak + self.cfg["audio"]["confirm_seconds"]
+            ratio = ch.detector.ratio_between(t0, t1)
+        else:
+            t0, t1 = m.start, m.end
+            ratio = m.score
+        feats = chat_features(list(ch.recent_chat), t0, t1)
+        excess = ch.audio.max_excess_between(m.start - 10, m.end + 5) if ch.audio else 0.0
+        if m.kind == "audio":
+            excess = max(excess, m.score)
+        total, parts = score_moment(m.kind, ratio, feats, excess)
+        detail = ", ".join(f"{k} {v}" for k, v in parts.items())
+        now = time.time()
+        ch.accepted = [t for t in ch.accepted if now - t < 3600]
+        if total < sc["min_score"]:
+            self.weak += 1
+            log.info("📉 [%s] слабый момент %d/100 (%s) — пропускаю", ch.name, total, detail)
+            return None
+        if len(ch.accepted) >= sc["max_per_hour"]:
+            self.weak += 1
+            log.info("⏸ [%s] уже %d клипов за час — пропускаю момент %d/100", ch.name, len(ch.accepted), total)
+            return None
+        ch.accepted.append(now)
+        log.info("⭐ [%s] момент %d/100 (%s) — монтирую", ch.name, total, detail)
+        return {"total": total, "parts": parts, "people": feats["uniq"]}
 
     async def worker(self) -> None:
         while True:
@@ -373,6 +411,7 @@ class App:
                     try:
                         self.jobs.put_nowait((src, 0.0, float(c["duration"]), name, {
                             "moment": {"kind": "viewers"}, "top_words": [], "source": c["url"],
+                            "score": {"total": 80, "parts": {"зрители": 80}},
                             "chat_lines": ch.chat_between(created - 40, created + 5),
                             "twitch_title": c["title"], "views": c.get("view_count")}))
                     except asyncio.QueueFull:
@@ -385,7 +424,8 @@ class App:
         lines = "\n".join(ch.status_line(now) for ch in sorted(chans, key=lambda c: c.name))
         return (f"🟢 Работаю {hours:.1f} ч. Пишу {len(chans)} стримов:\n"
                 f"{lines or 'сейчас нет подходящих стримов'}\n\n"
-                f"Клипов за этот запуск: {self.clips_made} · отсеял редактор: {self.rejected} · "
+                f"Клипов за этот запуск: {self.clips_made} · слабых пропущено: {self.weak} · "
+                f"отсеял редактор: {self.rejected} · "
                 f"в очереди на монтаж: {self.jobs.qsize()}\n"
                 f"💬 — сообщений чата за минуту, 🎥 — сколько записи хранится, 🔊 — громкость сейчас,\n"
                 f"🔥 — пойманные моменты: взрыв чата, крик/смех стримера, клипы зрителей")
