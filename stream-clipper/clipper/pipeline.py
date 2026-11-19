@@ -79,7 +79,7 @@ class ClipProcessor:
         if crop and info.get("face"):
             face = info["face"]
             same = bool(entry.get("face")) and _near(face, entry["face"])
-            if entry.get("hits", 0) >= 2 and not same:
+            if entry.get("hits", 0) >= 2 and not same and info.get("hint_alive", True):
                 # вебку у этого стримера уже дважды находили в другом месте — это лицо
                 # скорее всего из игры. Берём проверенную вебку.
                 log.info("[%s] найдено лицо не там, где обычно вебка (%s) — беру проверенную вебку",

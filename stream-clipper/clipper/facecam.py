@@ -11,6 +11,7 @@ import logging
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Callable
 
 log = logging.getLogger("facecam")
 
@@ -45,7 +46,7 @@ def detect_faces(images: list) -> list[list[Box]]:
 
 
 def stable_face(per_frame: list[list[Box]], min_share: float = 0.4,
-                hint: Box | None = None) -> Box | None:
+                hint: Box | None = None, alive: "Callable[[Box], bool] | None" = None) -> Box | None:
     """Лицо стримера: стоит на одном месте в большинстве кадров.
 
     Если таких лиц несколько (в вебке гости, в кадре ещё чья-то камера),
@@ -81,6 +82,12 @@ def stable_face(per_frame: list[list[Box]], min_share: float = 0.4,
                 break
         else:
             uniq.append((box, len(g)))
+    if alive is not None:
+        # лица на постерах и картинах за спиной стримера неподвижны до пикселя —
+        # если есть хоть одно «живое» лицо, неживые отбрасываем
+        living = [(u, n) for u, n in uniq if alive(u)]
+        if living:
+            uniq = living
     if hint is not None:
         hx, hy = hint[0] + hint[2] / 2, hint[1] + hint[3] / 2
         near = [(u, n) for u, n in uniq
@@ -96,6 +103,22 @@ def stable_face(per_frame: list[list[Box]], min_share: float = 0.4,
     # крупный персонаж игры в центре не должен перебить вебку в углу
     return max(uniq, key=lambda un: (un[0][2] * un[0][3]) ** 0.5 * (0.5 + un[1] / len(frames))
                * edge_factor(un[0]))[0]  # type: ignore[return-value]
+
+
+def face_is_alive(images: list, face: Box, threshold: float = 3.0) -> bool:
+    """Живое ли лицо: у человека картинка лица меняется от кадра к кадру
+    (моргает, говорит, двигается), у постера — нет."""
+    import cv2
+    import numpy as np
+
+    h, w = images[0].shape[:2]
+    x, y = int(face[0] * w), int(face[1] * h)
+    bw, bh = max(4, int(face[2] * w)), max(4, int(face[3] * h))
+    crops = [cv2.resize(cv2.cvtColor(im[y:y + bh, x:x + bw], cv2.COLOR_BGR2GRAY), (48, 48)).astype(np.float32)
+             for im in images if im[y:y + bh, x:x + bw].size]
+    if len(crops) < 3:
+        return True
+    return float(np.stack(crops).std(axis=0).mean()) > threshold
 
 
 def webcam_rect(images: list, face: Box) -> Box:
@@ -205,11 +228,13 @@ def find_facecam(src: Path, offset: float, dur: float, panel_aspect: float,
         if not images:
             return None
         h, w = images[0].shape[:2]
-        face = stable_face(detect_faces(images), hint=hint)
+        face = stable_face(detect_faces(images), hint=hint, alive=lambda b: face_is_alive(images, b))
         if face is None:
             return None
         rect = webcam_rect(images, face)
     log.info("вебка: %s, лицо: %s", [round(v, 3) for v in rect], [round(v, 3) for v in face])
     if found is not None:
         found["face"] = [round(float(v), 4) for v in face]
+        if hint is not None:
+            found["hint_alive"] = face_is_alive(images, tuple(hint))
     return face_crop(face, w / h, panel_aspect, zoom, rect)

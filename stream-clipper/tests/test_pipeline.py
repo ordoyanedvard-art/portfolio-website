@@ -781,3 +781,44 @@ def test_telegram_redo_button(tmp_path):
     assert len([c for c in fake.calls if c[0] == "sendVideo"]) == 2      # новый клип отправлен
     assert any(c[0] == "deleteMessage" for c in fake.calls)               # старый удалён
     assert sid not in bot.state["clips"]
+
+
+def test_poster_face_loses_to_live_streamer():
+    """Постер с лицами за спиной стримера: лица на нём неподвижны, стример — живой."""
+    import numpy as np
+    from clipper.facecam import face_is_alive, stable_face
+    rng = np.random.default_rng(2)
+    poster = (0.40, 0.10, 0.10, 0.18)
+    streamer = (0.42, 0.45, 0.08, 0.14)
+    base = rng.integers(0, 255, (540, 960, 3), dtype=np.uint8)
+    frames = []
+    for _ in range(8):
+        f = base.copy()
+        y, x = int(0.45 * 540), int(0.42 * 960)
+        f[y:y + 76, x:x + 77] = rng.integers(0, 255, (76, 77, 3), dtype=np.uint8)   # живое лицо меняется
+        frames.append(f)
+    assert not face_is_alive(frames, poster) and face_is_alive(frames, streamer)
+    boxes = [[poster, streamer] for _ in range(8)]
+    pick = stable_face(boxes, alive=lambda b: face_is_alive(frames, b))
+    assert abs(pick[1] - 0.45) < 1e-6
+    # даже если прошлое положение «запомнилось» на постере
+    pick = stable_face(boxes, hint=poster, alive=lambda b: face_is_alive(frames, b))
+    assert abs(pick[1] - 0.45) < 1e-6
+
+
+def test_trusted_poster_is_replaced_by_live_face(tmp_path, monkeypatch):
+    import clipper.pipeline as pl
+    cfg = load_config(tmp_path / "none.yaml")
+    cfg["output"]["dir"] = str(tmp_path / "clips")
+    proc = pl.ClipProcessor(cfg)
+    poster = {"crop": [0.3, 0.0, 0.3, 0.3], "face": [0.40, 0.10, 0.10, 0.18], "hits": 3}
+    proc.face_cache["s"] = poster
+    live_crop = [0.35, 0.35, 0.3, 0.3]
+
+    def f(src, offset, dur, aspect, zoom, hint=None, found=None):
+        found.update(face=[0.42, 0.45, 0.08, 0.14], hint_alive=False)
+        return live_crop
+
+    monkeypatch.setattr(pl, "find_facecam", f)
+    assert proc.facecam_for(Path("x"), 0, 1, "s") == live_crop
+    assert proc.face_cache["s"]["hits"] == 1
