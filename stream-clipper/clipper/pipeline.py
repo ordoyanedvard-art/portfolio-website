@@ -150,12 +150,15 @@ class ClipProcessor:
                 **meta.model_dump(), **extra}
         if verdict:
             info["judge"] = {"score": verdict.score, "reason": verdict.reason}
+        if self.cfg["output"]["keep_source_days"] > 0 or self.cfg["output"]["keep_raw"]:
+            # исходник без субтитров — для кнопки «Переделать субтитры»
+            source = out_dir / ("source" + (src.suffix or ".ts"))
+            shutil.copy(src, source)
+            info["render_args"] = {"source": source.name, "offset": offset, "dur": dur}
         (out_dir / "meta.json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
         (out_dir / "caption.txt").write_text(
             f"{meta.title}\n\n{meta.description}\n\n" + " ".join("#" + h for h in meta.hashtags) + "\n",
             encoding="utf-8")
-        if self.cfg["output"]["keep_raw"]:
-            shutil.copy(src, out_dir / "source.ts")
         log.info("✅ клип готов: %s — %s", out_dir, meta.title)
         if self.notifier:
             try:
@@ -163,6 +166,52 @@ class ClipProcessor:
             except Exception as e:  # Telegram не должен ронять монтаж
                 log.warning("не удалось отправить клип в Telegram: %s", e)
         return out_dir
+
+
+    def resubtitle(self, out_dir: Path) -> Path:
+        """Заново распознать речь самой точной моделью и пересобрать клип."""
+        meta_file = out_dir / "meta.json"
+        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        args = meta.get("render_args")
+        if not args or not (out_dir / args["source"]).exists():
+            raise FileNotFoundError("исходник клипа уже удалён")
+        src, offset, dur = out_dir / args["source"], args["offset"], args["dur"]
+        tcfg = dict(self.cfg["transcribe"], model=self.cfg["transcribe"]["redo_model"])
+        log.info("📝 [%s] переделываю субтитры моделью %s", meta.get("channel"), tcfg["model"])
+        wav = out_dir / "audio.wav"
+        try:
+            extract_wav(src, offset, dur, wav)
+            words, transcript = Transcriber(tcfg).words(wav)   # модель выгрузится после — память не держим
+        finally:
+            wav.unlink(missing_ok=True)
+        render(src, offset, dur, out_dir, self.cfg["render"], words, meta.get("facecam"))
+        meta.update(transcript=transcript, subtitle_words=len(words), subtitles_model=tcfg["model"])
+        meta.pop("telegram", None)
+        meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        log.info("📝 [%s] субтитры переделаны: %d слов", meta.get("channel"), len(words))
+        return out_dir
+
+    def prune_sources(self) -> int:
+        """Удалить исходники старых, опубликованных и удалённых клипов (место на диске)."""
+        days = self.cfg["output"]["keep_source_days"]
+        if self.cfg["output"]["keep_raw"]:
+            return 0
+        removed = 0
+        for meta_file in self.out_root.glob("*/*/meta.json"):
+            try:
+                meta = json.loads(meta_file.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            args = meta.get("render_args") or {}
+            src = meta_file.parent / args.get("source", "")
+            if not args or not src.is_file():
+                continue
+            old = time.time() - meta_file.stat().st_mtime > days * 86400
+            done = (meta.get("telegram") or {}).get("status") == "published"
+            if old or done:
+                src.unlink(missing_ok=True)
+                removed += 1
+        return removed
 
 
 class Channel:
@@ -237,6 +286,8 @@ class App:
         self.started = time.time()
         self.bot = make_bot(cfg, self.status_text)
         self.processor = ClipProcessor(cfg, self.bot)
+        if self.bot:
+            self.bot.on_resubtitle = self.processor.resubtitle
         self.moments_log = Path(cfg["output"]["dir"]) / "moments.jsonl"
         self.moments_log.parent.mkdir(parents=True, exist_ok=True)
 
@@ -388,6 +439,9 @@ class App:
                     await self.chat.part(name)
                     log.info("[%s] больше не в списке — остановлен", name)
                 log.info("пишу %d стримов: %s", len(self.channels), ", ".join(sorted(self.channels)))
+                pruned = await asyncio.to_thread(self.processor.prune_sources)
+                if pruned:
+                    log.info("удалено старых исходников клипов: %d", pruned)
             except Exception as e:
                 log.error("не удалось обновить список стримов: %s", e)
             await asyncio.sleep(self.cfg["twitch"]["refresh_seconds"])

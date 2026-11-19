@@ -65,10 +65,11 @@ def build_caption(meta: dict) -> str:
     return text[:1024]  # лимит подписи в Telegram
 
 
-KEYBOARD = lambda sid: json.dumps({"inline_keyboard": [[  # noqa: E731
-    {"text": "✅ Опубликовал", "callback_data": f"pub:{sid}"},
-    {"text": "🗑 Удалить", "callback_data": f"del:{sid}"},
-]]})
+KEYBOARD = lambda sid: json.dumps({"inline_keyboard": [  # noqa: E731
+    [{"text": "✅ Опубликовал", "callback_data": f"pub:{sid}"},
+     {"text": "🗑 Удалить", "callback_data": f"del:{sid}"}],
+    [{"text": "📝 Переделать субтитры", "callback_data": f"subs:{sid}"}],
+]})
 
 
 class TelegramBot:
@@ -77,6 +78,8 @@ class TelegramBot:
         self.token = token
         self.state_file = Path(data_dir) / "telegram.json"
         self.status = status or (lambda: "Программа работает.")
+        self.on_resubtitle: Callable[[Path], Path] | None = None   # пересборка субтитров (ставит программа)
+        self.redo_lock = threading.Lock()                          # по одному клипу за раз
         self.lock = threading.Lock()
         try:
             self.state = json.loads(self.state_file.read_text(encoding="utf-8"))
@@ -231,6 +234,8 @@ class TelegramBot:
                                                         {"text": "✅ Опубликовано", "callback_data": "noop:"},
                                                         {"text": "🗑 Удалить", "callback_data": f"del:{sid}"}]]})})
                 answer = "Отмечено как опубликованное"
+            elif action == "subs":
+                answer = self._start_redo(sid, d, msg["message_id"])
             elif action == "del":
                 shutil.rmtree(d, ignore_errors=True)
                 with self.lock:
@@ -243,6 +248,36 @@ class TelegramBot:
                                                         "reply_markup": json.dumps({"inline_keyboard": []})})
                 answer = "Клип удалён"
         self.api("answerCallbackQuery", {"callback_query_id": cb["id"], "text": answer})
+
+    def _start_redo(self, sid: str, d: Path, message_id: int) -> str:
+        if not self.on_resubtitle:
+            return "Сейчас недоступно"
+        if not self.redo_lock.acquire(blocking=False):
+            return "Уже переделываю другой клип — нажмите позже"
+
+        def work() -> None:
+            try:
+                self._say("⏳ Переделываю субтитры точной моделью — это займёт несколько минут…")
+                self.on_resubtitle(d)
+                new_sid = self.send_clip(d)
+                if new_sid:
+                    with self.lock:
+                        self.state["clips"].pop(sid, None)
+                        self._save()
+                    try:
+                        self.api("deleteMessage", {"chat_id": self.chat_id, "message_id": message_id})
+                    except RuntimeError:
+                        pass
+            except FileNotFoundError:
+                self._say("Исходник этого клипа уже удалён (хранится 2 дня) — переделать нельзя.")
+            except Exception as e:
+                log.warning("не удалось переделать субтитры: %s", e)
+                self._say(f"Не получилось переделать субтитры: {e}")
+            finally:
+                self.redo_lock.release()
+
+        threading.Thread(target=work, name=f"redo-{sid}", daemon=True).start()
+        return "Переделываю субтитры…"
 
     def _set_status(self, d: Path, status: str) -> None:
         f = d / "meta.json"

@@ -706,3 +706,78 @@ def test_game_speech_and_latin_words_dropped():
     audio[int(2.2 * 16000):int(5.8 * 16000)] = 1.0          # «английский» кусок
     words = [w.text for w in tr._run(audio, vad=True)]
     assert words == ["Чат,", "смотрите", "это"]
+
+
+def test_resubtitle_rebuilds_from_kept_source(sample_video, tmp_path, monkeypatch):
+    import clipper.pipeline as pl
+    proc = _processor_with_words(tmp_path, monkeypatch, 10)
+    out = proc.process(sample_video, 1, 4, "evelone2004", {"moment": {"kind": "chat"}})
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert meta["render_args"]["offset"] == 1 and (out / meta["render_args"]["source"]).exists()
+    used = {}
+
+    class Large:
+        def __init__(self, cfg):
+            used["model"] = cfg["model"]
+
+        def words(self, wav):
+            ws = [Word(0.2 + i * 0.4, 0.5 + i * 0.4, f"точно{i}") for i in range(15)]
+            return ws, " ".join(w.text for w in ws)
+
+    monkeypatch.setattr(pl, "Transcriber", Large)
+    before = (out / "clip.mp4").stat().st_mtime_ns
+    proc.resubtitle(out)
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert used["model"] == "large-v3" and meta["subtitle_words"] == 15
+    assert meta["subtitles_model"] == "large-v3" and "точно0" in meta["transcript"]
+    assert (out / "clip.mp4").stat().st_mtime_ns != before
+
+
+def test_prune_sources(sample_video, tmp_path, monkeypatch):
+    import os
+    proc = _processor_with_words(tmp_path, monkeypatch, 10)
+    dirs = [proc.process(sample_video, 0, 3, f"s{i}", {"moment": {"kind": "chat"}}) for i in range(3)]
+    srcs = [d / json.loads((d / "meta.json").read_text(encoding="utf-8"))["render_args"]["source"]
+            for d in dirs]
+    m0 = dirs[0] / "meta.json"                                   # старый клип
+    os.utime(m0, (time.time() - 3 * 86400, time.time() - 3 * 86400))
+    m1 = dirs[1] / "meta.json"                                   # опубликован
+    meta = json.loads(m1.read_text(encoding="utf-8"))
+    meta["telegram"] = {"status": "published"}
+    m1.write_text(json.dumps(meta), encoding="utf-8")
+    assert proc.prune_sources() == 2
+    assert not srcs[0].exists() and not srcs[1].exists() and srcs[2].exists()
+    assert (dirs[0] / "clip.mp4").exists()                       # сам клип не трогаем
+
+
+def test_telegram_redo_button(tmp_path):
+    import threading
+    from clipper.telegram import TelegramBot
+    bot = TelegramBot("T", tmp_path, chat_id="777")
+    bot.api = fake = FakeTG()
+    d = _clip_dir(tmp_path)
+    sid = bot.send_clip(d)
+    assert "subs:" in [c for c in fake.calls if c[0] == "sendVideo"][0][1]["reply_markup"]
+    done = threading.Event()
+    gate = threading.Event()
+
+    def redo(path):
+        gate.wait(5)
+        done.set()
+        return path
+
+    bot.on_resubtitle = redo
+    msg = {"message_id": 42, "chat": {"id": 777}}
+    bot.handle({"callback_query": {"id": "q1", "data": f"subs:{sid}", "message": msg}})
+    bot.handle({"callback_query": {"id": "q2", "data": f"subs:{sid}", "message": msg}})   # пока занят
+    answers = [c[1]["text"] for c in fake.calls if c[0] == "answerCallbackQuery"]
+    assert answers[0].startswith("Переделываю") and answers[1].startswith("Уже переделываю")
+    gate.set()
+    assert done.wait(5)
+    for _ in range(50):
+        if not bot.redo_lock.locked():
+            break
+        time.sleep(0.05)
+    assert len([c for c in fake.calls if c[0] == "sendVideo"]) == 2      # новый клип отправлен
+    assert any(c[0] == "deleteMessage" for c in fake.calls)               # старый удалён
+    assert sid not in bot.state["clips"]

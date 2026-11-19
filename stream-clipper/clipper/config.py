@@ -100,6 +100,7 @@ DEFAULTS: dict = {
         "device": "auto",           # auto/cpu/cuda
         "compute_type": "int8",
         "language": "ru",           # язык стримеров; None = автоопределение
+        "redo_model": "large-v3",   # модель для кнопки «Переделать субтитры» (точнее, но медленнее)
         "drop_foreign_speech": True,  # выкидывать фразы на другом языке (английская речь персонажей игры)
     },
     "scoring": {                    # бесплатная оценка момента по чату и звуку (0–100)
@@ -123,7 +124,8 @@ DEFAULTS: dict = {
     },
     "output": {
         "dir": "data/clips",
-        "keep_raw": False,
+        "keep_raw": False,          # хранить исходники всегда
+        "keep_source_days": 2,      # сколько дней хранить исходник для «Переделать субтитры» (0 — не хранить)
     },
     "twitch_clips_mode": {
         "period_hours": 6,
