@@ -39,10 +39,11 @@ class Transcriber:
         return self._model
 
     def words(self, wav: Path) -> tuple[list[Word], str]:
-        words = self._run(wav, vad=True)
+        audio = self._load_wav(wav)
+        words = self._run(audio, vad=True)
         if len(words) < 8:
             # фильтр тишины мог принять речь под громкий звук игры за шум — пробуем без него
-            alt = self._run(wav, vad=False)
+            alt = self._run(audio, vad=False)
             if len(alt) > len(words):
                 words = alt
         log.info("расшифровка: %d слов", len(words))
@@ -62,22 +63,48 @@ class Transcriber:
             raw = f.readframes(f.getnframes())
         return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
 
-    def _run(self, wav: Path, vad: bool) -> list[Word]:
+    def _foreign(self, audio, start: float, end: float) -> str | None:
+        """Язык фразы, если это явно НЕ язык стримера (например, английская речь
+        персонажей GTA). Whisper с language="ru" выдаёт её английскими словами
+        или даже переводит на русский — поэтому язык проверяем по самому звуку."""
+        target = self.cfg.get("language")
+        if not target or not self.cfg.get("drop_foreign_speech", True):
+            return None
+        mid = (start + end) / 2
+        half = max(1.5, (end - start) / 2 + 0.3)       # не меньше 3 секунд звука
+        a, b = int(max(0.0, mid - half) * 16000), int((mid + half) * 16000)
+        try:
+            _lang, _p, probs = self._load().detect_language(audio[a:b])
+        except Exception:
+            return None
+        probs = dict(probs)
+        top, top_p = max(probs.items(), key=lambda kv: kv[1])
+        if top != target and top_p >= 0.5 and probs.get(target, 0.0) < 0.25:
+            return top
+        return None
+
+    def _run(self, audio, vad: bool) -> list[Word]:
         segments, _info = self._load().transcribe(
-            self._load_wav(wav), word_timestamps=True, language=self.cfg["language"],
+            audio, word_timestamps=True, language=self.cfg["language"],
             condition_on_previous_text=False, beam_size=5, temperature=[0.0, 0.2, 0.4],
             vad_filter=vad,
             # мягче стандартного: речь под громкий звук игры не выкидывается
             vad_parameters={"threshold": 0.35, "min_silence_duration_ms": 600, "speech_pad_ms": 300},
         )
         words: list[Word] = []
-        total = dropped = weak = 0
+        total = dropped = weak = game = 0
+        cyrillic_target = self.cfg.get("language") == "ru"
         for seg in segments:
             total += 1
             if is_hallucination(seg.text, seg.avg_logprob, seg.no_speech_prob, seg.compression_ratio):
                 dropped += 1
                 log.info("отброшено как выдуманное: %r (уверенность %.2f, тишина %.2f)",
                          seg.text[:60], seg.avg_logprob, seg.no_speech_prob)
+                continue
+            lang = self._foreign(audio, seg.start, seg.end)
+            if lang:
+                game += 1
+                log.info("отброшено как речь из игры (%s): %r", lang, seg.text[:60])
                 continue
             for w in seg.words or []:
                 t = w.word.strip()
@@ -86,9 +113,12 @@ class Transcriber:
                 if w.probability < 0.05:
                     weak += 1
                     continue
+                if cyrillic_target and is_latin_word(t):
+                    weak += 1          # английские слова в русской речи — почти всегда реплики игры
+                    continue
                 words.append(Word(w.start, w.end, t))
-        log.info("распознавание (%s): фраз %d, отброшено %d, слов %d, неразборчивых %d",
-                 "с фильтром тишины" if vad else "без фильтра тишины", total, dropped, len(words), weak)
+        log.info("распознавание (%s): фраз %d, выдуманных %d, из игры %d, слов %d, отброшено слов %d",
+                 "с фильтром тишины" if vad else "без фильтра тишины", total, dropped, game, len(words), weak)
         return fix_timings(words)
 
 
@@ -106,6 +136,17 @@ def is_hallucination(text: str, avg_logprob: float, no_speech_prob: float, compr
         return True
     # Речь под громкий звук игры часто «неуверенная» — выкидываем только явный шум.
     return no_speech_prob > 0.9 and avg_logprob < -1.0
+
+
+_LATIN = re.compile(r"[A-Za-z]")
+_CYR = re.compile(r"[А-Яа-яЁё]")
+_KEEP_LATIN = {"ok", "gg", "wtf", "omg", "lol", "gta", "kekw"}
+
+
+def is_latin_word(word: str) -> bool:
+    """Слово целиком латиницей (не считая коротких «gg», «ok», «GTA»)."""
+    core = re.sub(r"[^\w]", "", word).lower()
+    return bool(_LATIN.search(word)) and not _CYR.search(word) and core not in _KEEP_LATIN
 
 
 def fix_timings(words: list[Word]) -> list[Word]:

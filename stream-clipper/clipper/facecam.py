@@ -121,15 +121,29 @@ def webcam_rect(images: list, face: Box) -> Box:
     cols = slice(int(max(0, fx - fw)), int(min(W, fx + 2 * fw)))   # полоса вокруг лица
     rows = slice(int(max(0, fy - fh)), int(min(H, fy + 2 * fh)))
 
-    def scan(seq, line_moving, line_edge):
-        """Первая позиция, где начинается движение (5 линий подряд) или стоит рамка."""
+    def scan(seq, line_moving, line_edge, person_max):
+        """Край вебки, идя от лица наружу.
+
+        Сначала идёт сам стример: он двигается (наклоняется, жестикулирует), и это
+        движение нельзя принимать за игру. Поэтому сперва ищем неподвижный кусок
+        комнаты (3 линии подряд) не дальше person_max линий от лица, и только
+        после него — начало движения (игра, 5 линий подряд) или прямую рамку."""
         seq = list(seq)
-        for i, p in enumerate(seq):
-            ahead = seq[i:i + 5]
+        run, start = 0, None
+        for i, p in enumerate(seq[:person_max]):
+            run = run + 1 if line_moving(p) < 0.5 else 0
+            if run >= 3:
+                start = i - 2
+                break
+        if start is None:
+            return None            # до самого края двигался человек — край не знаем
+        rest = seq[start:]
+        for i, p in enumerate(rest):
+            ahead = rest[i:i + 5]
             if len(ahead) == 5 and all(line_moving(q) >= 0.5 for q in ahead):
                 return p
-        for p in seq:
-            if line_edge(p) >= 0.6:
+        for p in rest:
+            if line_edge(p) >= 0.8:
                 return p
         return None
 
@@ -139,10 +153,11 @@ def webcam_rect(images: list, face: Box) -> Box:
     col_edge = lambda x: max(edges[rows, max(0, x - 1):x + 2].mean(axis=0))  # noqa: E731
 
     gap = 0.25
-    bottom = scan(range(int(fy + fh * (1 + gap)), H), row_mov, row_edge)
-    top = scan(range(int(fy - fh * gap), -1, -1), row_mov, row_edge)
-    right = scan(range(int(fx + fw * (1 + gap)), W), col_mov, col_edge)
-    left = scan(range(int(fx - fw * gap), -1, -1), col_mov, col_edge)
+    pv, ph = int(fh * 2.5), int(fw * 2.5)          # дальше этого «человек» уже не тянется
+    bottom = scan(range(int(fy + fh * (1 + gap)), H), row_mov, row_edge, pv)
+    top = scan(range(int(fy - fh * gap), -1, -1), row_mov, row_edge, pv)
+    right = scan(range(int(fx + fw * (1 + gap)), W), col_mov, col_edge, ph)
+    left = scan(range(int(fx - fw * gap), -1, -1), col_mov, col_edge, ph)
     # не нашли край — не уходим от лица дальше разумного
     bottom = bottom if bottom is not None else min(H, int(fy + fh * 2.2))
     top = top + 1 if top is not None else max(0, int(fy - fh * 0.9))
@@ -165,7 +180,7 @@ def face_crop(face: Box, src_aspect: float, panel_aspect: float, zoom: float,
         cw = bw
         ch = cw / k
     cx = fx + fw / 2
-    cy = fy + fh / 2 + ch * 0.08                 # лицо чуть выше центра — видно плечи
+    cy = fy + fh / 2 + ch * 0.08                 # лицо на 42% высоты: над головой запас, видно плечи
     x = min(max(cx - cw / 2, bx), bx + bw - cw)
     y = min(max(cy - ch / 2, by), by + bh - ch)
     return [round(float(v), 4) for v in (x, y, cw, ch)]

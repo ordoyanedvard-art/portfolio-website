@@ -608,8 +608,8 @@ def test_silent_streamer_rejected(sample_video, tmp_path, monkeypatch):
     out = proc.process(sample_video, 0, 4, "evelone2004", {"moment": {"kind": "chat"}})
     assert out is None
     assert "молчит" in (tmp_path / "clips" / "rejected.jsonl").read_text(encoding="utf-8")
-    proc2 = _processor_with_words(tmp_path, monkeypatch, 3)          # клипы зрителей не трогаем
-    assert proc2.process(sample_video, 0, 4, "s", {"moment": {"kind": "viewers"}}) is not None
+    proc2 = _processor_with_words(tmp_path, monkeypatch, 3)          # и клипы зрителей тоже
+    assert proc2.process(sample_video, 0, 4, "s", {"moment": {"kind": "viewers"}}) is None
 
 
 def test_talking_streamer_kept(sample_video, tmp_path, monkeypatch):
@@ -652,3 +652,57 @@ def test_noisy_but_real_speech_is_kept():
     from clipper.editor import is_hallucination
     assert not is_hallucination("ну давай погнали, копы едут", -1.1, 0.6, 1.3)
     assert is_hallucination("", -1.5, 0.95, 1.0)
+
+
+def test_webcam_rect_ignores_moving_streamer():
+    """Стример наклоняется и машет руками — это движение внутри вебки,
+    край вебки дальше, за неподвижной комнатой."""
+    import numpy as np
+    from clipper.facecam import webcam_rect
+    rng = np.random.default_rng(1)
+    frames = []
+    for k in range(8):
+        blocks = rng.integers(0, 255, (54, 96, 3), dtype=np.uint8)
+        f = np.repeat(np.repeat(blocks, 10, axis=0), 10, axis=1)      # игра
+        f[200:500, 20:420] = 90                                      # комната (вебка 400x300)
+        body = rng.integers(0, 255, (16, 20, 3), dtype=np.uint8)     # человек двигается
+        f[290:450, 120:320] = np.repeat(np.repeat(body, 10, axis=0), 10, axis=1)
+        f[300:360, 195:245] = 200                                    # лицо
+        frames.append(f)
+    face = (195 / 960, 300 / 540, 50 / 960, 60 / 540)
+    x, y, w, h = webcam_rect(frames, face)
+    assert abs(x - 20 / 960) < 0.015 and abs(x + w - 420 / 960) < 0.015, (x, w)
+    assert abs(y - 200 / 540) < 0.02, y
+
+
+def test_game_speech_and_latin_words_dropped():
+    import numpy as np
+    from types import SimpleNamespace as NS
+
+    from clipper.editor import Transcriber, is_latin_word
+    assert is_latin_word("WHAT'S") and is_latin_word("this?")
+    assert not is_latin_word("GG") and not is_latin_word("чат,") and not is_latin_word("ок")
+
+    def seg(start, end, text, words):
+        return NS(start=start, end=end, text=text, avg_logprob=-0.3, no_speech_prob=0.1,
+                  compression_ratio=1.2,
+                  words=[NS(start=start + i * 0.3, end=start + i * 0.3 + 0.25, word=w, probability=0.9)
+                         for i, w in enumerate(words)])
+
+    class FakeModel:
+        def transcribe(self, audio, **kw):
+            return [seg(0.0, 2.0, "Чат, смотрите", ["Чат,", "смотрите"]),
+                    seg(3.0, 5.0, "Что ты не знаешь", ["Что", "ты", "не", "знаешь"]),   # перевод речи NPC
+                    seg(6.0, 8.0, "это what's this", ["это", "what's", "this"])], None
+
+        def detect_language(self, audio):
+            # язык — тот, что преобладает в окне (как у настоящей модели)
+            return ("en", 0.9, [("en", 0.9), ("ru", 0.05)]) if audio.mean() > 0.5 else \
+                   ("ru", 0.9, [("ru", 0.9), ("en", 0.05)])
+
+    tr = Transcriber({"language": "ru", "drop_foreign_speech": True})
+    tr._model = FakeModel()
+    audio = np.zeros(16000 * 9, dtype=np.float32)
+    audio[int(2.2 * 16000):int(5.8 * 16000)] = 1.0          # «английский» кусок
+    words = [w.text for w in tr._run(audio, vad=True)]
+    assert words == ["Чат,", "смотрите", "это"]

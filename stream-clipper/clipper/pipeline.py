@@ -117,7 +117,7 @@ class ClipProcessor:
         chat_lines = extra.pop("chat_lines", [])
         kind = (extra.get("moment") or {}).get("kind", "chat")
         min_words = self.cfg["scoring"].get("min_speech_words", 0)
-        if transcribed and kind != "viewers" and len(words) < min_words:
+        if transcribed and len(words) < min_words:
             log.info("🤐 [%s] стример почти молчит (%d слов) — клип не нужен", channel, len(words))
             with (self.out_root / "rejected.jsonl").open("a", encoding="utf-8") as f:
                 f.write(json.dumps({"channel": channel, "kind": kind, "reason": "молчит",

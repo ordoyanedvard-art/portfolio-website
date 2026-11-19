@@ -99,7 +99,8 @@ DEFAULTS: dict = {
         "model": "small",           # tiny/base/small/medium/large-v3
         "device": "auto",           # auto/cpu/cuda
         "compute_type": "int8",
-        "language": None,           # None = автоопределение
+        "language": "ru",           # язык стримеров; None = автоопределение
+        "drop_foreign_speech": True,  # выкидывать фразы на другом языке (английская речь персонажей игры)
     },
     "scoring": {                    # бесплатная оценка момента по чату и звуку (0–100)
         "enabled": True,

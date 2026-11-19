@@ -63,6 +63,7 @@ render:
 transcribe:
   model: medium     # точнее small, но медленнее; на слабом CPU — small; с видеокартой — large-v3
   language: ru
+  drop_foreign_speech: true   # не делать субтитры из английской речи персонажей игры
 
 titles:
   enabled: true     # нужен ANTHROPIC_API_KEY в .env; без него — шаблонные заголовки
