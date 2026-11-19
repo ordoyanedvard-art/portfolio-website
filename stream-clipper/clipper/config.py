@@ -90,6 +90,7 @@ DEFAULTS: dict = {
         "font_size": 78,
         "highlight_color": "&H0000FFFF",  # ASS BGR: жёлтый
         "words_per_line": 3,
+        "subtitles": False,         # вшивать субтитры в видео (False — чистое видео + файл subtitles.srt)
         "watermark": "",            # например "@my_clips"
         # Где вебка у конкретного стримера (доли кадра: x, y, w, h) — для layout=split
         "facecams": {},

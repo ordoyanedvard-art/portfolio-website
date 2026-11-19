@@ -588,10 +588,11 @@ def test_parse_privmsg_full_keeps_nick():
         ("evelone2004", "vasya", "KEKW")
 
 
-def _processor_with_words(tmp_path, monkeypatch, n_words):
+def _processor_with_words(tmp_path, monkeypatch, n_words, burn=False):
     import clipper.pipeline as pl
     cfg = load_config(tmp_path / "none.yaml")
     cfg["output"]["dir"] = str(tmp_path / "clips")
+    cfg["render"]["subtitles"] = burn
     proc = pl.ClipProcessor(cfg)
 
     class FakeTranscriber:
@@ -710,7 +711,7 @@ def test_game_speech_and_latin_words_dropped():
 
 def test_resubtitle_rebuilds_from_kept_source(sample_video, tmp_path, monkeypatch):
     import clipper.pipeline as pl
-    proc = _processor_with_words(tmp_path, monkeypatch, 10)
+    proc = _processor_with_words(tmp_path, monkeypatch, 10, burn=True)
     out = proc.process(sample_video, 1, 4, "evelone2004", {"moment": {"kind": "chat"}})
     meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
     assert meta["render_args"]["offset"] == 1 and (out / meta["render_args"]["source"]).exists()
@@ -735,7 +736,7 @@ def test_resubtitle_rebuilds_from_kept_source(sample_video, tmp_path, monkeypatc
 
 def test_prune_sources(sample_video, tmp_path, monkeypatch):
     import os
-    proc = _processor_with_words(tmp_path, monkeypatch, 10)
+    proc = _processor_with_words(tmp_path, monkeypatch, 10, burn=True)
     dirs = [proc.process(sample_video, 0, 3, f"s{i}", {"moment": {"kind": "chat"}}) for i in range(3)]
     srcs = [d / json.loads((d / "meta.json").read_text(encoding="utf-8"))["render_args"]["source"]
             for d in dirs]
@@ -755,9 +756,6 @@ def test_telegram_redo_button(tmp_path):
     from clipper.telegram import TelegramBot
     bot = TelegramBot("T", tmp_path, chat_id="777")
     bot.api = fake = FakeTG()
-    d = _clip_dir(tmp_path)
-    sid = bot.send_clip(d)
-    assert "subs:" in [c for c in fake.calls if c[0] == "sendVideo"][0][1]["reply_markup"]
     done = threading.Event()
     gate = threading.Event()
 
@@ -767,6 +765,9 @@ def test_telegram_redo_button(tmp_path):
         return path
 
     bot.on_resubtitle = redo
+    d = _clip_dir(tmp_path)
+    sid = bot.send_clip(d)
+    assert "subs:" in [c for c in fake.calls if c[0] == "sendVideo"][0][1]["reply_markup"]
     msg = {"message_id": 42, "chat": {"id": 777}}
     bot.handle({"callback_query": {"id": "q1", "data": f"subs:{sid}", "message": msg}})
     bot.handle({"callback_query": {"id": "q2", "data": f"subs:{sid}", "message": msg}})   # пока занят
@@ -822,3 +823,18 @@ def test_trusted_poster_is_replaced_by_live_face(tmp_path, monkeypatch):
     monkeypatch.setattr(pl, "find_facecam", f)
     assert proc.facecam_for(Path("x"), 0, 1, "s") == live_crop
     assert proc.face_cache["s"]["hits"] == 1
+
+
+def test_clean_video_without_burned_subtitles(sample_video, tmp_path, monkeypatch):
+    """По умолчанию субтитры не вшиваются: чистое видео + subtitles.srt, без кнопки «Переделать»."""
+    proc = _processor_with_words(tmp_path, monkeypatch, 12)
+    out = proc.process(sample_video, 0, 4, "evelone2004", {"moment": {"kind": "chat"}})
+    assert not (out / "subs.ass").exists()
+    srt = (out / "subtitles.srt").read_text(encoding="utf-8")
+    assert srt.startswith("1\n00:00:00,000 --> ") and "слово0" in srt
+    assert "render_args" not in json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    from clipper.telegram import TelegramBot
+    bot = TelegramBot("T", tmp_path, chat_id="777")
+    bot.api = fake = FakeTG()
+    bot.send_clip(out)
+    assert "subs:" not in [c for c in fake.calls if c[0] == "sendVideo"][0][1]["reply_markup"]

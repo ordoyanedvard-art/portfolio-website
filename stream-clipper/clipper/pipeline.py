@@ -16,7 +16,7 @@ from pathlib import Path
 from .chat import TwitchChat
 from .config import streamlink_bin
 from .detector import AudioSpikeDetector, ChatSpikeDetector, Moment
-from .editor import Transcriber, extract_wav, render
+from .editor import Transcriber, build_srt, extract_wav, render
 from .facecam import find_facecam
 from .recorder import StreamRecorder
 from .scoring import chat_features, score_moment
@@ -140,7 +140,10 @@ class ClipProcessor:
                 shutil.rmtree(out_dir, ignore_errors=True)
                 return None
         facecam = self.facecam_for(src, offset, dur, channel)
-        render(src, offset, dur, out_dir, self.cfg["render"], words, facecam)
+        burn = self.cfg["render"].get("subtitles", False)
+        render(src, offset, dur, out_dir, self.cfg["render"], words if burn else None, facecam)
+        if words:
+            (out_dir / "subtitles.srt").write_text(build_srt(words), encoding="utf-8")
         if verdict:
             meta = ClipMeta(title=verdict.title, description=verdict.description, hashtags=verdict.hashtags)
         else:
@@ -150,7 +153,8 @@ class ClipProcessor:
                 **meta.model_dump(), **extra}
         if verdict:
             info["judge"] = {"score": verdict.score, "reason": verdict.reason}
-        if self.cfg["output"]["keep_source_days"] > 0 or self.cfg["output"]["keep_raw"]:
+        burn_subs = self.cfg["render"].get("subtitles", False)
+        if (self.cfg["output"]["keep_source_days"] > 0 and burn_subs) or self.cfg["output"]["keep_raw"]:
             # исходник без субтитров — для кнопки «Переделать субтитры»
             source = out_dir / ("source" + (src.suffix or ".ts"))
             shutil.copy(src, source)
@@ -185,6 +189,7 @@ class ClipProcessor:
         finally:
             wav.unlink(missing_ok=True)
         render(src, offset, dur, out_dir, self.cfg["render"], words, meta.get("facecam"))
+        (out_dir / "subtitles.srt").write_text(build_srt(words), encoding="utf-8")
         meta.update(transcript=transcript, subtitle_words=len(words), subtitles_model=tcfg["model"])
         meta.pop("telegram", None)
         meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -286,7 +291,7 @@ class App:
         self.started = time.time()
         self.bot = make_bot(cfg, self.status_text)
         self.processor = ClipProcessor(cfg, self.bot)
-        if self.bot:
+        if self.bot and cfg["render"].get("subtitles", False):   # кнопка нужна, только если субтитры вшиваются
             self.bot.on_resubtitle = self.processor.resubtitle
         self.moments_log = Path(cfg["output"]["dir"]) / "moments.jsonl"
         self.moments_log.parent.mkdir(parents=True, exist_ok=True)

@@ -65,11 +65,12 @@ def build_caption(meta: dict) -> str:
     return text[:1024]  # лимит подписи в Telegram
 
 
-KEYBOARD = lambda sid: json.dumps({"inline_keyboard": [  # noqa: E731
-    [{"text": "✅ Опубликовал", "callback_data": f"pub:{sid}"},
-     {"text": "🗑 Удалить", "callback_data": f"del:{sid}"}],
-    [{"text": "📝 Переделать субтитры", "callback_data": f"subs:{sid}"}],
-]})
+def KEYBOARD(sid: str, redo: bool = True) -> str:  # noqa: N802
+    rows = [[{"text": "✅ Опубликовал", "callback_data": f"pub:{sid}"},
+             {"text": "🗑 Удалить", "callback_data": f"del:{sid}"}]]
+    if redo:
+        rows.append([{"text": "📝 Переделать субтитры", "callback_data": f"subs:{sid}"}])
+    return json.dumps({"inline_keyboard": rows})
 
 
 class TelegramBot:
@@ -150,7 +151,7 @@ class TelegramBot:
             res = self.api("sendVideo", {
                 "chat_id": self.chat_id, "caption": build_caption(meta), "supports_streaming": "true",
                 "width": "1080", "height": "1920", "duration": str(int(meta.get("duration", 0))),
-                "reply_markup": KEYBOARD(sid),
+                "reply_markup": KEYBOARD(sid, redo=self.on_resubtitle is not None),
             }, files={"video": video}, timeout=300)
         finally:
             if small:

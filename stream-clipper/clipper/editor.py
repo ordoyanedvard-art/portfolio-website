@@ -185,6 +185,20 @@ def chunk_words(words: list[Word], per_line: int, max_gap: float = 0.6) -> list[
     return chunks
 
 
+def build_srt(words: list[Word], per_line: int = 6) -> str:
+    """Обычный файл субтитров — черновик для CapCut и других редакторов."""
+    def ts(t: float) -> str:
+        t = max(0.0, t)
+        h, rem = divmod(t, 3600)
+        m, sec = divmod(rem, 60)
+        return f"{int(h):02d}:{int(m):02d}:{int(sec):02d},{int(round((sec % 1) * 1000)) % 1000:03d}"
+
+    out = []
+    for i, chunk in enumerate(chunk_words(words, per_line, max_gap=0.8), 1):
+        out.append(f"{i}\n{ts(chunk[0].start)} --> {ts(chunk[-1].end)}\n{' '.join(w.text for w in chunk)}\n")
+    return "\n".join(out)
+
+
 def build_ass(words: list[Word], r: dict, pos: tuple[int, int] | None = None) -> str:
     """pos=None — субтитры снизу (над интерфейсом соцсетей); pos=(x, y) — центр строки в точке."""
     W, H = r["width"], r["height"]
