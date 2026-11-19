@@ -586,3 +586,69 @@ def test_parse_privmsg_full_keeps_nick():
     from clipper.chat import parse_privmsg_full
     assert parse_privmsg_full(":Vasya!vasya@vasya.tmi.twitch.tv PRIVMSG #evelone2004 :KEKW") == \
         ("evelone2004", "vasya", "KEKW")
+
+
+def _processor_with_words(tmp_path, monkeypatch, n_words):
+    import clipper.pipeline as pl
+    cfg = load_config(tmp_path / "none.yaml")
+    cfg["output"]["dir"] = str(tmp_path / "clips")
+    proc = pl.ClipProcessor(cfg)
+
+    class FakeTranscriber:
+        def words(self, wav):
+            ws = [Word(i * 0.4, i * 0.4 + 0.3, f"слово{i}") for i in range(n_words)]
+            return ws, " ".join(w.text for w in ws)
+
+    proc.transcriber = FakeTranscriber()
+    return proc
+
+
+def test_silent_streamer_rejected(sample_video, tmp_path, monkeypatch):
+    proc = _processor_with_words(tmp_path, monkeypatch, 3)
+    out = proc.process(sample_video, 0, 4, "evelone2004", {"moment": {"kind": "chat"}})
+    assert out is None
+    assert "молчит" in (tmp_path / "clips" / "rejected.jsonl").read_text(encoding="utf-8")
+    proc2 = _processor_with_words(tmp_path, monkeypatch, 3)          # клипы зрителей не трогаем
+    assert proc2.process(sample_video, 0, 4, "s", {"moment": {"kind": "viewers"}}) is not None
+
+
+def test_talking_streamer_kept(sample_video, tmp_path, monkeypatch):
+    proc = _processor_with_words(tmp_path, monkeypatch, 12)
+    out = proc.process(sample_video, 0, 4, "evelone2004", {"moment": {"kind": "chat"}})
+    assert out is not None
+    assert json.loads((out / "meta.json").read_text(encoding="utf-8"))["subtitle_words"] == 12
+
+
+def test_game_face_in_center_loses_to_webcam_at_edge():
+    from clipper.facecam import stable_face
+    webcam = (0.03, 0.70, 0.06, 0.11)      # маленькое лицо в углу
+    game = (0.42, 0.35, 0.12, 0.21)        # крупный персонаж в центре
+    frames = [[webcam, game] for _ in range(8)]
+    assert abs(stable_face(frames)[0] - 0.03) < 1e-6
+
+
+def test_trusted_webcam_beats_new_face(tmp_path, monkeypatch):
+    import clipper.pipeline as pl
+    cfg = load_config(tmp_path / "none.yaml")
+    cfg["output"]["dir"] = str(tmp_path / "clips")
+    proc = pl.ClipProcessor(cfg)
+    cam_face, cam_crop = [0.03, 0.70, 0.06, 0.11], [0.0, 0.6, 0.2, 0.3]
+
+    def fake(face, crop):
+        def f(src, offset, dur, aspect, zoom, hint=None, found=None):
+            found["face"] = face
+            return crop
+        return f
+
+    monkeypatch.setattr(pl, "find_facecam", fake(cam_face, cam_crop))
+    for _ in range(2):
+        assert proc.facecam_for(Path("x"), 0, 1, "evelone2004") == cam_crop
+    assert proc.face_cache["evelone2004"]["hits"] == 2
+    monkeypatch.setattr(pl, "find_facecam", fake([0.45, 0.4, 0.1, 0.18], [0.3, 0.3, 0.3, 0.3]))
+    assert proc.facecam_for(Path("x"), 0, 1, "evelone2004") == cam_crop   # лицо из игры не принято
+
+
+def test_noisy_but_real_speech_is_kept():
+    from clipper.editor import is_hallucination
+    assert not is_hallucination("ну давай погнали, копы едут", -1.1, 0.6, 1.3)
+    assert is_hallucination("", -1.5, 0.95, 1.0)

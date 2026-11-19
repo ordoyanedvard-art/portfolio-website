@@ -38,7 +38,8 @@ def detect_faces(images: list) -> list[list[Box]]:
         boxes: list[Box] = []
         for cascade in cascades:
             found = cascade.detectMultiScale(gray, scaleFactor=1.08, minNeighbors=5, minSize=(m, m))
-            boxes += [(x / w, y / h, bw / w, bh / h) for x, y, bw, bh in found]
+            # лицо больше трети кадра — это сцена в игре крупным планом, а не вебка
+            boxes += [(x / w, y / h, bw / w, bh / h) for x, y, bw, bh in found if bh / h <= 0.33]
         out.append(boxes)
     return out
 
@@ -86,7 +87,15 @@ def stable_face(per_frame: list[list[Box]], min_share: float = 0.4,
                 if abs(u[0] + u[2] / 2 - hx) < 0.08 and abs(u[1] + u[3] / 2 - hy) < 0.08]
         if near:
             return max(near, key=lambda un: un[1])[0]  # type: ignore[return-value]
-    return max(uniq, key=lambda un: un[0][2] * un[0][3] * (0.5 + un[1] / len(frames)))[0]  # type: ignore[return-value]
+    def edge_factor(b: Box) -> float:
+        """Вебка почти всегда у края или в углу кадра; лица персонажей игры — в центре."""
+        cx, cy = b[0] + b[2] / 2, b[1] + b[3] / 2
+        return 1.0 if (cx < 0.3 or cx > 0.7 or cy < 0.3 or cy > 0.7) else 0.35
+
+    # размер важен (стример ближе к камере, чем гости), но не решает всё:
+    # крупный персонаж игры в центре не должен перебить вебку в углу
+    return max(uniq, key=lambda un: (un[0][2] * un[0][3]) ** 0.5 * (0.5 + un[1] / len(frames))
+               * edge_factor(un[0]))[0]  # type: ignore[return-value]
 
 
 def webcam_rect(images: list, face: Box) -> Box:

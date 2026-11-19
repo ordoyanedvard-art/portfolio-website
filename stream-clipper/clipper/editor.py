@@ -40,9 +40,11 @@ class Transcriber:
 
     def words(self, wav: Path) -> tuple[list[Word], str]:
         words = self._run(wav, vad=True)
-        if not words:
+        if len(words) < 8:
             # фильтр тишины мог принять речь под громкий звук игры за шум — пробуем без него
-            words = self._run(wav, vad=False)
+            alt = self._run(wav, vad=False)
+            if len(alt) > len(words):
+                words = alt
         log.info("расшифровка: %d слов", len(words))
         return words, " ".join(w.text for w in words)
 
@@ -69,14 +71,24 @@ class Transcriber:
             vad_parameters={"threshold": 0.35, "min_silence_duration_ms": 600, "speech_pad_ms": 300},
         )
         words: list[Word] = []
+        total = dropped = weak = 0
         for seg in segments:
+            total += 1
             if is_hallucination(seg.text, seg.avg_logprob, seg.no_speech_prob, seg.compression_ratio):
-                log.debug("отброшено как выдуманное: %r", seg.text)
+                dropped += 1
+                log.info("отброшено как выдуманное: %r (уверенность %.2f, тишина %.2f)",
+                         seg.text[:60], seg.avg_logprob, seg.no_speech_prob)
                 continue
             for w in seg.words or []:
                 t = w.word.strip()
-                if t and w.probability >= 0.15:
-                    words.append(Word(w.start, w.end, t))
+                if not t:
+                    continue
+                if w.probability < 0.05:
+                    weak += 1
+                    continue
+                words.append(Word(w.start, w.end, t))
+        log.info("распознавание (%s): фраз %d, отброшено %d, слов %d, неразборчивых %d",
+                 "с фильтром тишины" if vad else "без фильтра тишины", total, dropped, len(words), weak)
         return fix_timings(words)
 
 
@@ -92,9 +104,8 @@ def is_hallucination(text: str, avg_logprob: float, no_speech_prob: float, compr
         return True
     if compression_ratio > 2.4:            # одно и то же слово по кругу
         return True
-    if avg_logprob < -1.0 and no_speech_prob > 0.5:
-        return True
-    return no_speech_prob > 0.8 and avg_logprob < -0.6
+    # Речь под громкий звук игры часто «неуверенная» — выкидываем только явный шум.
+    return no_speech_prob > 0.9 and avg_logprob < -1.0
 
 
 def fix_timings(words: list[Word]) -> list[Word]:

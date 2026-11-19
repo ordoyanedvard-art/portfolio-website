@@ -32,6 +32,12 @@ def _slug(s: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]+", "_", s)[:40]
 
 
+def _near(a: list[float], b: list[float], tol: float = 0.08) -> bool:
+    """Два найденных лица — в одном и том же месте кадра?"""
+    return (abs(a[0] + a[2] / 2 - b[0] - b[2] / 2) < tol
+            and abs(a[1] + a[3] / 2 - b[1] - b[3] / 2) < tol)
+
+
 def make_bot(cfg: dict, status=None):
     tg = cfg.get("telegram") or {}
     if not tg.get("token"):
@@ -70,11 +76,20 @@ class ClipProcessor:
         info: dict = {}
         crop = find_facecam(src, offset, dur, r["width"] / split_top(r), r["face_zoom"],
                             hint=entry.get("face"), found=info)
-        if crop:
-            self.face_cache[channel] = {"crop": crop, "face": info.get("face")}
+        if crop and info.get("face"):
+            face = info["face"]
+            same = bool(entry.get("face")) and _near(face, entry["face"])
+            if entry.get("hits", 0) >= 2 and not same:
+                # вебку у этого стримера уже дважды находили в другом месте — это лицо
+                # скорее всего из игры. Берём проверенную вебку.
+                log.info("[%s] найдено лицо не там, где обычно вебка (%s) — беру проверенную вебку",
+                         channel, face)
+                return entry.get("crop")
+            hits = entry.get("hits", 0) + 1 if same else 1
+            self.face_cache[channel] = {"crop": crop, "face": face, "hits": hits}
             self.out_root.mkdir(parents=True, exist_ok=True)
             self.face_cache_file.write_text(json.dumps(self.face_cache, indent=1), encoding="utf-8")
-            log.info("[%s] лицо найдено: %s", channel, crop)
+            log.info("[%s] лицо найдено: %s (совпадает с прошлыми: %d)", channel, crop, hits)
             return crop
         cached = entry.get("crop")
         log.info("[%s] лицо в клипе не найдено — %s", channel,
@@ -87,11 +102,13 @@ class ClipProcessor:
         out_dir = self.out_root / f"{stamp}_{_slug(channel)}"
         out_dir.mkdir(parents=True, exist_ok=True)
         words, transcript = [], ""
+        transcribed = False
         if self.transcriber:
             wav = out_dir / "audio.wav"
             try:
                 extract_wav(src, offset, dur, wav)
                 words, transcript = self.transcriber.words(wav)
+                transcribed = True
             except Exception as e:
                 log.exception("расшифровка не удалась: %s", e)
             finally:
@@ -99,6 +116,16 @@ class ClipProcessor:
         extra = dict(extra)
         chat_lines = extra.pop("chat_lines", [])
         kind = (extra.get("moment") or {}).get("kind", "chat")
+        min_words = self.cfg["scoring"].get("min_speech_words", 0)
+        if transcribed and kind != "viewers" and len(words) < min_words:
+            log.info("🤐 [%s] стример почти молчит (%d слов) — клип не нужен", channel, len(words))
+            with (self.out_root / "rejected.jsonl").open("a", encoding="utf-8") as f:
+                f.write(json.dumps({"channel": channel, "kind": kind, "reason": "молчит",
+                                    "words": len(words), "transcript": transcript[:300],
+                                    "time": datetime.now().isoformat(timespec="seconds")},
+                                   ensure_ascii=False) + "\n")
+            shutil.rmtree(out_dir, ignore_errors=True)
+            return None
         verdict = None
         if judge_available(self.cfg["judge"]):
             verdict = judge(self.cfg["judge"], self.cfg["titles"]["language"], channel, src, offset, dur,
@@ -425,7 +452,7 @@ class App:
         return (f"🟢 Работаю {hours:.1f} ч. Пишу {len(chans)} стримов:\n"
                 f"{lines or 'сейчас нет подходящих стримов'}\n\n"
                 f"Клипов за этот запуск: {self.clips_made} · слабых пропущено: {self.weak} · "
-                f"отсеял редактор: {self.rejected} · "
+                f"отсеяно после расшифровки (молчит/редактор): {self.rejected} · "
                 f"в очереди на монтаж: {self.jobs.qsize()}\n"
                 f"💬 — сообщений чата за минуту, 🎥 — сколько записи хранится, 🔊 — громкость сейчас,\n"
                 f"🔥 — пойманные моменты: взрыв чата, крик/смех стримера, клипы зрителей")
