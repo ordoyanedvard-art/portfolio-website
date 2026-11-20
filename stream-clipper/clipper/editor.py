@@ -246,6 +246,18 @@ def split_gap(r: dict) -> int:
     return _even(r["height"] * r.get("split_gap_ratio", 0.12))
 
 
+def hide_subs(r: dict) -> str:
+    """Размыть полосу внизу по центру кадра игры: там субтитры диалогов GTA и
+    автосубтитры, которые некоторые стримеры выводят на стрим. Возвращает
+    продолжение цепочки фильтров для кадра игры (или пусто, если выключено)."""
+    if not r.get("hide_stream_subtitles", True):
+        return ""
+    x, y, w, h = r.get("stream_subtitles_area", [0.2, 0.84, 0.6, 0.14])
+    return (f",split=2[gmain][gsub];"
+            f"[gsub]crop=iw*{w}:ih*{h}:iw*{x}:ih*{y},boxblur=18:3[gblur];"
+            f"[gmain][gblur]overlay=main_w*{x}:main_h*{y}")
+
+
 def video_filter(r: dict, facecam: list[float] | None, layout: str, has_subs: bool) -> str:
     W, H = r["width"], r["height"]
     if layout == "split" and facecam:
@@ -260,7 +272,7 @@ def video_filter(r: dict, facecam: list[float] | None, layout: str, has_subs: bo
              f"crop={W}:{top_h},unsharp=5:5:0.7:5:5:0.0,setsar=1[top];"
              f"[b]scale={W // 4}:{H // 4}:force_original_aspect_ratio=increase,crop={W // 4}:{H // 4},"
              f"boxblur=10:2,scale={W}:{H},eq=brightness=-0.15,setsar=1[bg];"
-             f"[c]scale={W}:-2:flags=lanczos,setsar=1[game];"
+             f"[c]scale={W}:-2:flags=lanczos,setsar=1{hide_subs(r)}[game];"
              f"[bg][top]overlay=0:0[t1];[t1][game]overlay=0:{game_y}[v0]")
     elif layout == "crop":
         g = f"[0:v]scale=-2:{H},crop={W}:{H},setsar=1[v0]"
@@ -268,7 +280,7 @@ def video_filter(r: dict, facecam: list[float] | None, layout: str, has_subs: bo
         g = (f"[0:v]split=2[a][b];"
              f"[a]scale={W // 4}:{H // 4}:force_original_aspect_ratio=increase,crop={W // 4}:{H // 4},"
              f"boxblur=10:2,scale={W}:{H},eq=brightness=-0.08[bg];"
-             f"[b]scale={W}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2-{H // 12},setsar=1[v0]")
+             f"[b]scale={W}:-2{hide_subs(r)}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2-{H // 12},setsar=1[v0]")
     last = "v0"
     if has_subs:
         g += f";[{last}]ass=subs.ass[v1]"

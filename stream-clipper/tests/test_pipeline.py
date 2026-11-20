@@ -838,3 +838,13 @@ def test_clean_video_without_burned_subtitles(sample_video, tmp_path, monkeypatc
     bot.api = fake = FakeTG()
     bot.send_clip(out)
     assert "subs:" not in [c for c in fake.calls if c[0] == "sendVideo"][0][1]["reply_markup"]
+
+
+def test_stream_subtitles_area_is_blurred():
+    from clipper.editor import video_filter
+    r = dict(DEFAULTS["render"])
+    g = video_filter(r, [0.0, 0.5, 0.2, 0.3], "split", False)
+    assert "crop=iw*0.6:ih*0.14:iw*0.2:ih*0.84,boxblur" in g
+    assert "boxblur=18" not in video_filter(dict(r, hide_stream_subtitles=False),
+                                            [0.0, 0.5, 0.2, 0.3], "split", False)
+    assert "boxblur=18" in video_filter(r, None, "blur", False)

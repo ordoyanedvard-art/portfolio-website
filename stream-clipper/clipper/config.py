@@ -91,6 +91,8 @@ DEFAULTS: dict = {
         "highlight_color": "&H0000FFFF",  # ASS BGR: жёлтый
         "words_per_line": 3,
         "subtitles": False,         # вшивать субтитры в видео (False — чистое видео + файл subtitles.srt)
+        "hide_stream_subtitles": True,  # размыть субтитры, которые уже есть на стриме (диалоги GTA, автосубтитры стримера)
+        "stream_subtitles_area": [0.2, 0.84, 0.6, 0.14],  # где они в кадре игры: x, y, ширина, высота (доли)
         "watermark": "",            # например "@my_clips"
         # Где вебка у конкретного стримера (доли кадра: x, y, w, h) — для layout=split
         "facecams": {},
